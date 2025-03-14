@@ -1,0 +1,20 @@
+{
+    "name": "Deno v2 + Brew + Docker",
+    "build": {
+      "dockerfile": "Dockerfile"
+    },
+    "runArgs": [
+      "--privileged",
+      "-v", "/var/run/docker.sock:/var/run/docker.sock"
+    ],
+    "settings": {
+      "terminal.integrated.defaultProfile.linux": "fish"
+    },
+    "extensions": [
+      "denoland.vscode-deno",
+      "eamodio.gitlens",
+      "esbenp.prettier-vscode"
+    ],
+    "remoteUser": "dev",
+    "postCreateCommand": "brew tap softdist/softdist || true; brew install fish softdist-release || true"
+  }
