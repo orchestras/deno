@@ -1,17 +1,14 @@
-# import config
+# Evaluate .env/.envcrypt files
+include .envcrypt
+$(eval export $(shell sed -ne 's/ *#.*$$//; /./ s/=.*$$// p' .envcrypt))
 
-ifeq ($(shell test -e .env),yes)
-	cnf ?= .env
-	include $(cnf)
-	export $(shell sed 's/=.*//' $(cnf))
-endif
-
-# HIDDEN
+# Print env var names and values
 print-%: ##  Print env var names and values
 	@echo $* = $($*)
 echo-%: ##  Print any environment variable
 	@echo $($*)
 
+	
 # HELP
 # This will output the help for each task
 # thanks to https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
@@ -22,8 +19,17 @@ help: ## Print all commands and help info
 
 .DEFAULT_GOAL := help
 
-envs:  ## Source env file if you are running local
-	./env.sh
+env:  ## Source env file if you are running local
+	./scripts/env.sh
+
+local:  ## Make local build
+	docker buildx bake bin 
+	docker buildx bake release
+
+build:  ## Make build
+	deno check ./src/mod.ts
+	deno compile --allow-all --no-check --target aarch64-apple-darwin --output ./bin/aarch64-apple-darwin/scanner ./src/mod.ts
+	deno compile --allow-all --no-check --target x86_64-apple-darwin --output ./bin/x86_64-apple-darwin/scanner ./src/mod.ts
 
 downstream-tags:  ## Downstream:  List git tags
 	git -c 'versionsort.suffix=-' ls-remote --tags --sort='v:refname' https://github.com/softdist/docker.client.git

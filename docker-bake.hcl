@@ -5,7 +5,10 @@ variable "PROGRAM" {
   default = "new-program"
 }
 variable "BUILD" {
-  default = "$BUILD"
+  default = "101010101"
+}
+variable "TAG" {
+  default = "local"
 }
 
 target "bin" {
@@ -22,7 +25,7 @@ target "bin" {
 target "release" {
   context = "."
   args = {
-    buildno = "${LYNS_INSTALL_BUILD_NUM}"
+    buildno = "${BUILD}"
   }
   dockerfile = "Dockerfile.release"
   tags = ["${REPO}/${PROGRAM}.release:${TAG}"]

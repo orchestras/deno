@@ -1,9 +1,11 @@
-#!/bin/bash
-if [ ! -f .env ]
+#!/usr/bin/env bash
+set -u
+pushd . && cd scripts
+envf="../.envcrypt"
+if [ ! -f $envf ]
 then
-  #export $(cat .env | xargs)
-  export $(sed 's/=.*//' .env)
+  export $(sed 's/=.*//' $envf)
 fi
 
-set -a && source .env && set +a
-
+set -a && source $envf && set +a
+popd
