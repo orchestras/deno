@@ -2,7 +2,7 @@ variable "REPO" {
   default = "lynsei"
 }
 variable "PROGRAM" {
-  default = "homebrew"
+  default = "devcontainer"
 }
 variable "TAG" {
   default = "latest"
@@ -10,7 +10,7 @@ variable "TAG" {
 
 target "brew" {
   context = "."
-  dockerfile = "Dockerfile.brew"
+  dockerfile = "Dockerfile"
   tags = ["${REPO}/${PROGRAM}:${TAG}"]
   no-cache = true
   platforms = ["linux/arm64","linux/amd64"]

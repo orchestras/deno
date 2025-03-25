@@ -26,3 +26,5 @@ echo "$newtag" > .semver.build.tag
 
 cat .semver.build.tag
 cat .semver.commit.tag
+cat .semver.build.tag > .semver.version.tag
+cat .semver.version.tag

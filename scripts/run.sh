@@ -1,5 +1,3 @@
-set -u
-
 # host
 os=`uname -s`
 rev=`uname -r`

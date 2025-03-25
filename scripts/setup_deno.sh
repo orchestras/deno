@@ -3,7 +3,6 @@
 # We don't need return codes for "$(command)", only stdout is needed.
 # Allow `[[ -n "$(command)" ]]`, `func "$(command)"`, pipes, etc.
 # shellcheck disable=SC2312
-set -u
 export __DEVOPS_CONFIG_PATH=$HOME/.config/.devops
 export __DEVOPS_MACHINE_ARCH=`uname -m`
 abort() {
@@ -44,9 +43,9 @@ if [[ `which brew` ]]
 	then
   	echo "Brew detected!"
   else
-    curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o $PWD/install.sh
-    chmod +x $PWD/install.sh
-    bash -c "NONINTERACTIVE=true $PWD/install.sh"
+    curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o $PWD/brew.sh
+    chmod +x $PWD/brew.sh
+    bash -c "NONINTERACTIVE=true $PWD/brew.sh"
 fi
 
 # install brew if it does not exist

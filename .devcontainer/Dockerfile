@@ -3,7 +3,9 @@ FROM debian:bookworm-slim
 
 # this makes debian not prompt for stuff
 ENV DEBIAN_FRONTEND=NONINTERACTIVE
-
+COPY trusted_certs.pem /usr/local/share/ca-certificates/trusted_certs.crt
+RUN apt -o "Acquire::https::Verify-Peer=false" update && apt-get -o "Acquire::https::Verify-Peer=false" install -y ca-certificates
+RUN update-ca-certificates
 # install pre-req apt packages
 # python3 defaults to python 3.11 in Debian Bookworm
 RUN apt-get update && \
@@ -31,7 +33,10 @@ RUN apt-get update && \
         libgdbm6 \
         libgdbm-dev \
         libdb-dev \
-        uuid-dev
+        uuid-dev \
+        fish \
+        bash \
+        gh
 
 # create default user
 RUN useradd -m friend && \
@@ -78,4 +83,4 @@ RUN sudo mkdir /home/linuxbrew && sudo chmod 755 /home/linuxbrew && sudo chown f
 USER root
 USER friend
 
-ENTRYPOINT ["/bin/bash"]
+ENTRYPOINT ["fish"]

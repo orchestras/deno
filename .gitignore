@@ -142,3 +142,9 @@ pnpm-lock.yaml
 # databases
 *.kdbx
 *.kdb
+
+# binaries
+bin/
+
+.devcontainer/trusted_certs.pem
+trusted_certs.pem

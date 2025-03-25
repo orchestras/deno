@@ -1,4 +1,4 @@
-# Evaluate .env/.envcrypt files
+$(shell touch .envcrypt)
 include .envcrypt
 $(eval export $(shell sed -ne 's/ *#.*$$//; /./ s/=.*$$// p' .envcrypt))
 
@@ -7,7 +7,6 @@ print-%: ##  Print env var names and values
 	@echo $* = $($*)
 echo-%: ##  Print any environment variable
 	@echo $($*)
-
 	
 # HELP
 # This will output the help for each task
@@ -22,11 +21,11 @@ help: ## Print all commands and help info
 env:  ## Source env file if you are running local
 	./scripts/env.sh
 
-local:  ## Make local build
-	docker buildx bake bin 
-	docker buildx bake release
+build-docker:  ## Make docker build
+	echo "Please add trusted certs to this directory prior to building."
+	./scripts/docker_build.sh
 
-build:  ## Make build
+build:  ## Make local build
 	deno check ./src/mod.ts
 	deno compile --allow-all --no-check --target aarch64-apple-darwin --output ./bin/aarch64-apple-darwin/scanner ./src/mod.ts
 	deno compile --allow-all --no-check --target x86_64-apple-darwin --output ./bin/x86_64-apple-darwin/scanner ./src/mod.ts
