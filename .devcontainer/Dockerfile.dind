@@ -1,0 +1,27 @@
+FROM  --platform=$BUILDPLATFORM michaelr0/volta-docker:alpine AS volta
+FROM --platform=$BUILDPLATFORM docker:28.0.1-dind-alpine3.21 AS dind
+
+COPY --from=volta /opt/volta /opt/volta
+
+ENV VOLTA_HOME=/opt/volta
+ENV VOLTA_BIN_PATH=/opt/volta/bin
+
+WORKDIR /home/expert/workspace
+
+USER root
+ENV PATH=$PATH:/opt/volta/bin
+RUN apk add --no-cache --no-check-certificate ca-certificates python3 pipx py3-pip py3-virtualenv uv fish bash xclip xsel deno ruby go direnv typescript && \
+    update-ca-certificates && \
+    python3 -m venv ./ && \
+    . ./bin/activate && \
+    pip install --upgrade pip && \
+    pip install pipenv && \
+    volta setup && \
+    volta install node && \
+    volta install typescript && \
+    volta install npm && \
+    volta install npx && \
+    volta install yarn && \
+    volta install pnpm
+
+ENTRYPOINT ["fish", "-i"]

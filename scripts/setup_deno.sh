@@ -3,6 +3,7 @@
 # We don't need return codes for "$(command)", only stdout is needed.
 # Allow `[[ -n "$(command)" ]]`, `func "$(command)"`, pipes, etc.
 # shellcheck disable=SC2312
+set +u
 export __DEVOPS_CONFIG_PATH=$HOME/.config/.devops
 export __DEVOPS_MACHINE_ARCH=`uname -m`
 abort() {

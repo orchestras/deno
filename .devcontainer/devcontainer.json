@@ -1,11 +1,11 @@
 {
-    "dockerComposeFile": [
-      "docker-compose.yml"
-    ],
-    "service": "devcontainer",
-    "extensions": [
-      "denoland.vscode-deno",
-      "eamodio.gitlens",
-      "esbenp.prettier-vscode"
-    ]
-  }
+    "name": "devcontainer",
+	"dockerComposeFile": [
+		"./docker-compose.yml"
+	],
+	"privileged": true,
+	"features": false, 
+	"service": "devcontainer",
+    "workspaceFolder": "/home/expert/workspace",
+	"containerUser": "root"
+}
