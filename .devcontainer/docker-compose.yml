@@ -9,7 +9,5 @@ services:
     volumes:
       - ../:/home/expert/workspace
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${HOME}/.config/fish:/home/expert/.config/fish
-      - ${HOME}/.config/.devops/trusted_certs.pem:/home/expert/.config/.devops/trusted_certs.pem
     working_dir: /home/expert/workspace
     entrypoint: ["fish"]
