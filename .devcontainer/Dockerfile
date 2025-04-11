@@ -11,9 +11,10 @@ ARG USE_MOBY="true"
 
 # Enable new "BUILDKIT" mode for Docker CLI
 ENV DOCKER_BUILDKIT=1
-ENV PATH=$PATH:/opt/volta/bin
+ENV PATH=$PATH:/opt/volta/bin:/root/.deno/bin
 ENV VOLTA_HOME=/opt/volta
 ENV VOLTA_BIN_PATH=/opt/volta/bin
+ENV DENO_BIN_PATH=/root/.deno/bin
 
 # Install needed packages and setup non-root user. Use a separate RUN statement to add your
 # own dependencies. A user of "automatic" attempts to reuse an user ID if one already exists.
