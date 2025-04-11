@@ -1,10 +1,17 @@
+version: '3'
+
 services:
-  devcontainer:
-    # note:  this is a docker-in-docker volta, deno, typescript, python, uv, go, ruby, fish, bash, and xsel + ca-certs
-    image: lynsei/devcontainer.deno:latest
-    platform: linux/arm64
-    environment:
-      - "DENO_CERT=/home/expert/.config/.devops/trusted_certs.pem"
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+
     volumes:
-      - $PWD/../:/home/expert/workspace
-      - ~/.config:/home/expert/.config
+      # Forwards the local Docker socket to the container.
+      - /var/run/docker.sock:/var/run/docker-host.sock 
+      # Update this to wherever you want VS Code to mount the folder of your project
+      - ..:/workspace:cached
+
+    # Overrides default command so things don't shut down after the process ends.
+    entrypoint: /usr/local/share/docker-init.sh
+    command: sleep infinity 
