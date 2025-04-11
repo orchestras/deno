@@ -1,8 +1,6 @@
 services:
   devcontainer:
-    # note:  this is a docker-in-docker volta, deno, typescript, python, uv, go, ruby, fish, bash, and xsel + ca-certs
-    build: .
-    environment:
-      - "DENO_CERT=/home/expert/.config/.devops/trusted_certs.pem"
+    build:
+      context: .
     volumes:
       - $PWD/../:/home/expert/workspace

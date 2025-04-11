@@ -3,7 +3,7 @@ FROM --platform=$BUILDPLATFORM docker:28.0.4-dind-alpine3.21 AS dind
 ENV PATH=$PATH:/opt/volta/bin
 COPY trusted_certs.pem /usr/local/share/ca-certificates/trusted_certs.crt
 COPY --from=volta /opt/volta /opt/volta
-
+LABEL devcontainer-feature-set="none"
 ENV VOLTA_HOME=/opt/volta
 ENV VOLTA_BIN_PATH=/opt/volta/bin
 
