@@ -15,7 +15,40 @@
 		"vscode": {		
 			// Add the IDs of extensions you want installed when the container is created.
 			"extensions": [
-				"ms-azuretools.vscode-docker"
+				"ms-azuretools.vscode-docker",
+                "denoland.vscode-deno",
+                "laurencebahiirwa.deno-std-lib-snippets",
+                "eamodio.gitlens",
+                "editorconfig.editorconfig",
+                "esbenp.prettier-vscode",
+                "dbaeumer.vscode-eslint",
+                "github.copilot",
+                "github.copilot-chat",
+                "docker.docker",
+                "chrmarti.regex",
+                "bierner.markdown-preview-github-styles",
+                "bierner.markdown-yaml-preamble",
+                "bierner.markdown-footnotes",
+                "bierner.markdown-mermaid",
+                "bierner.github-markdown-preview",
+                "bierner.color-info",
+                "firsttris.vscode-jest-runner",
+                "humao.rest-client",
+                "hb432.prettier-eslint-typescript",
+                "gregorbiswanger.json2ts",
+                "grapecity.gc-excelviewer",
+                "jebbs.plantuml",
+                "mindpixel-labs.vsc-expressionengine",
+                "muggle.regexsnippets",
+                "orta.vscode-jest",
+                "qaqulya.encypt-decypt",
+                "redhat.vscode-yaml",
+                "reliutg.visual-regex",
+                "shakram02.bash-beautify",
+                "skyapps.fish-vscode",
+                "tim-koehler.helm-intellisense",
+                "yzhang.markdown-all-in-one",
+                "zainchen.json"
 			]
 		}
 	},
