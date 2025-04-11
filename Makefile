@@ -1,5 +1,7 @@
 $(shell touch .envcrypt)
-include .envcrypt
+ifeq ($(CODESPACES),"FALSE")
+  include .envcrypt
+endif
 $(eval export $(shell sed -ne 's/ *#.*$$//; /./ s/=.*$$// p' .envcrypt))
 
 # Print env var names and values
