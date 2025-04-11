@@ -1,8 +1,8 @@
 services:
   devcontainer:
     # note:  this is a docker-in-docker volta, deno, typescript, python, uv, go, ruby, fish, bash, and xsel + ca-certs
-    image: lynsei/devcontainer.deno:latest
-    platform: linux/amd64
+    build: .
+    dockerfile: Dockerfile.simple
     environment:
       - "DENO_CERT=/home/expert/.config/.devops/trusted_certs.pem"
     volumes:
