@@ -1,13 +1,10 @@
 services:
   devcontainer:
     # note:  this is a docker-in-docker volta, deno, typescript, python, uv, go, ruby, fish, bash, and xsel + ca-certs
-    image: lynsei/devcontainer-volta.deno.typescript.python.uv:latest
+    image: lynsei/devcontainer.deno:latest
     platform: linux/arm64
-    privileged: true
     environment:
-      - DENO_CERT=/home/expert/.config/.devops/trusted_certs.pem
+      - "DENO_CERT=/home/expert/.config/.devops/trusted_certs.pem"
     volumes:
-      - ../:/home/expert/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
-    working_dir: /home/expert/workspace
-    entrypoint: ["fish"]
+      - $PWD/../:/home/expert/workspace
+      - ~/.config:/home/expert/.config

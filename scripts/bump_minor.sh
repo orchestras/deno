@@ -21,5 +21,7 @@ msg=$(echo "Last Commit: $commit")
 echo "$msg" > .semver.commit.tag
 echo "$newtag" > .semver.version.tag
 
+git tag -a $(cat .semver.version.tag) -m $(cat .semver.version.tag) 
 cat .semver.version.tag
 cat .semver.commit.tag
+

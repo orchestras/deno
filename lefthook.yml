@@ -1,0 +1,31 @@
+# Lefthook configuration file
+#  - Refer for explanation to following link:
+#    https://lefthook.dev/configuration/
+pre-push:
+  parallel: false
+  jobs:
+    - name: "deno lint"
+      tags:
+        - backend
+        - security
+      run: deno lint
+pre-commit:
+  parallel: false
+  jobs:
+    - name: "Lint"
+      tags:
+        - backend
+        - quality
+      run: deno lint
+      staged: true
+    - name: "Checks"
+      tags:
+        - backend
+        - security
+      run: make run
+    - name: "trufflehog"
+      tags:
+        - backend
+        - security
+      run: trufflehog filesystem . -x .hogignore
+      staged: true

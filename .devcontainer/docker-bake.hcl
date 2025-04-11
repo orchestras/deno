@@ -8,18 +8,18 @@ variable "TAG" {
   default = "latest"
 }
 
-target "brew" {
+target "dind" {
   context = "."
-  dockerfile = "Dockerfile"
-  tags = ["${REPO}/${PROGRAM}:${TAG}"]
+  dockerfile = "Dockerfile.dind"
+  tags = ["${REPO}/${PROGRAM}.dind:${TAG}"]
   no-cache = true
   platforms = ["linux/arm64","linux/amd64"]
 }
 
-target "dind" {
+target "simple" {
   context = "."
-  dockerfile = "Dockerfile.dind"
-  tags = ["${REPO}/devcontainer-volta.deno.typescript.python.uv:${TAG}"]
+  dockerfile = "Dockerfile.simple"
+  tags = ["${REPO}/${PROGRAM}.deno:${TAG}"]
   no-cache = true
   platforms = ["linux/arm64","linux/amd64"]
 }
