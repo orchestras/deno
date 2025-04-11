@@ -11,7 +11,7 @@ ARG USE_MOBY="true"
 
 # Enable new "BUILDKIT" mode for Docker CLI
 ENV DOCKER_BUILDKIT=1
-ENV PATH=$PATH:/opt/volta/bin:/root/.deno/bin
+ENV PATH=$PATH:/opt/volta/bin:/root/.deno/bin:/usr/bin:/usr/local/bin:/bin:/root/bin
 ENV VOLTA_HOME=/opt/volta
 ENV VOLTA_BIN_PATH=/opt/volta/bin
 ENV DENO_BIN_PATH=/root/.deno/bin
