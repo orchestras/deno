@@ -28,11 +28,11 @@ RUN apt-get update \
     # Clean up
     && apt-get install -y --no-install-recommends \
         ca-certificates \
-        deno \
         direnv \
         fish \
         xclip \
         xsel \
+    && curl -fsSL https://deno.land/install.sh | sh \
     && curl https://get.volta.sh | bash \
     && apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/library-scripts/
 
