@@ -1,4 +1,4 @@
-# Note: You can use any Debian/Ubuntu based image you want. 
+# syntax=docker/dockerfile:1
 FROM mcr.microsoft.com/vscode/devcontainers/base:bullseye
 
 # [Option] Install zsh
@@ -12,6 +12,9 @@ ARG USE_MOBY="true"
 
 # Enable new "BUILDKIT" mode for Docker CLI
 ENV DOCKER_BUILDKIT=1
+ENV PATH=$PATH:/opt/volta/bin
+ENV VOLTA_HOME=/opt/volta
+ENV VOLTA_BIN_PATH=/opt/volta/bin
 
 # Install needed packages and setup non-root user. Use a separate RUN statement to add your
 # own dependencies. A user of "automatic" attempts to reuse an user ID if one already exists.
@@ -24,6 +27,14 @@ RUN apt-get update \
     # Use Docker script from script library to set things up
     && /bin/bash /tmp/library-scripts/docker-debian.sh "${ENABLE_NONROOT_DOCKER}" "/var/run/docker-host.sock" "/var/run/docker.sock" "${USERNAME}" \
     # Clean up
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        deno \
+        direnv \
+        fish \
+        xclip \
+        xsel \
+    && curl https://get.volta.sh | bash \
     && apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/library-scripts/
 
 # Setting the ENTRYPOINT to docker-init.sh will configure non-root access 
