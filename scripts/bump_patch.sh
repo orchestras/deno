@@ -21,10 +21,6 @@ msg=$(echo "Last Commit: $commit")
 echo "$msg" > .semver.commit.tag
 echo "$newtag" > .semver.version.tag
 
+git tag -a $(cat .semver.version.tag) -m $(cat .semver.version.tag) 
 cat .semver.version.tag
 cat .semver.commit.tag
-
-# x  need logic for updating src/deno.json
-# √  need logic for updating using 'deno task build'
-# x  need logic to add git tag (or not, this happens automatically in the build process)
-# x  need logic to push tag to origin?

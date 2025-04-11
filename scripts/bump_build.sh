@@ -24,7 +24,6 @@ msg=$(echo -e "Build No: $build \nLast Commit: $commit")
 echo "$msg" > .semver.commit.tag
 echo "$newtag" > .semver.build.tag
 
+git tag -a $(cat .semver.build.tag) -m $(cat .semver.build.tag) 
 cat .semver.build.tag
 cat .semver.commit.tag
-cat .semver.build.tag > .semver.version.tag
-cat .semver.version.tag

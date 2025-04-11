@@ -147,7 +147,8 @@ pnpm-lock.yaml
 *.kdb
 
 # binaries
-bin/
+bin/**/*
+bin
 
 .devcontainer/trusted_certs.pem
 trusted_certs.pem
