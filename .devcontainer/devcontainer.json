@@ -8,6 +8,20 @@
 	"remoteEnv": {
 		"LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}"
 	},
+    "settings": {
+        "terminal.integrated.defaultProfile.linux": "fish", 
+        "terminal.integrated.profiles.linux": {
+            "bash": {
+                "path": "/bin/bash"
+            },
+            "zsh": {
+                "path": "/bin/zsh"
+            },
+            "fish": {
+                "path": "/usr/bin/fish"
+            }
+        }
+    },
 
 	// Configure tool-specific properties.
 	"customizations": {
@@ -370,12 +384,6 @@
 			]
 		}
 	},
-
-	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
-
-	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "fish && docker --version",
 
 	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "root"
