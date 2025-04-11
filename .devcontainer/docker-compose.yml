@@ -7,4 +7,3 @@ services:
       - "DENO_CERT=/home/expert/.config/.devops/trusted_certs.pem"
     volumes:
       - $PWD/../:/home/expert/workspace
-      - ~/.config:/home/expert/.config
