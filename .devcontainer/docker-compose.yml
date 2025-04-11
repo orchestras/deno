@@ -4,3 +4,4 @@ services:
       context: .
     volumes:
       - $PWD/../:/home/expert/workspace
+    command: ["sleep", "infinity"]
