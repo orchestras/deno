@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM --platform=$BUILDPLATFORM michaelr0/volta-docker:alpine AS volta
 FROM --platform=$BUILDPLATFORM docker:28.0.4-dind-alpine3.21 AS dind
 ENV PATH=$PATH:/opt/volta/bin

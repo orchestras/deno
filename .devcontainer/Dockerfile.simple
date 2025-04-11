@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM  --platform=$BUILDPLATFORM alpine:3 AS alpine
 LABEL devcontainer-feature-set="none"
 WORKDIR /home/expert/workspace
