@@ -32,8 +32,8 @@ RUN apt-get update \
         fish \
         xclip \
         xsel \
-    && curl -fsSL https://deno.land/install.sh | sh \
-    && curl https://get.volta.sh | bash \
+    && /bin/bash /tmp/library-scripts/deno.sh -y \
+    && /bin/bash /tmp/library-scripts/volta.sh \
     && apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/* /tmp/library-scripts/
 
 # Setting the ENTRYPOINT to docker-init.sh will configure non-root access 
