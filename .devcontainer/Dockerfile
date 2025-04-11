@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 FROM mcr.microsoft.com/vscode/devcontainers/base:bullseye
 
 # [Option] Install zsh
