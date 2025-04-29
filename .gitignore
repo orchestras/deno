@@ -152,3 +152,5 @@ bin
 
 .devcontainer/trusted_certs.pem
 trusted_certs.pem
+.trunk/**/*
+.trunk
