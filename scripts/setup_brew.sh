@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
+# include
+. ./scripts/colors.sh
+
 # We don't need return codes for "$(command)", only stdout is needed.
 # Allow `[[ -n "$(command)" ]]`, `func "$(command)"`, pipes, etc.
 # shellcheck disable=SC2312
-set +u
 export __DEVOPS_CONFIG_PATH=$HOME/.config/.devops
 export __DEVOPS_MACHINE_ARCH=`uname -m`
 abort() {
@@ -49,10 +51,73 @@ if [[ `which brew` ]]
     bash -c "NONINTERACTIVE=true $PWD/brew.sh"
 fi
 
-# install brew if it does not exist
 if [[ `which deno` ]]
 	then
-  echo "Deno Detected!"
+  echo -e "deno ... ${GREEN} [OK] ${ENDCOLOR}"
 else
   brew reinstall deno
+fi
+
+if [[ `which lefthook` ]]
+	then
+  echo -e "lefthook ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall lefthook
+fi
+
+if [[ `which prettier` ]]
+	then
+  echo -e "prettier ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall prettier
+fi
+
+if [[ `which transcrypt` ]]
+	then
+  echo -e "transcrypt ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall transcrypt
+fi
+
+if [[ `which direnv` ]]
+	then
+  echo -e "direnv ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall direnv
+fi
+
+if [[ `which gh` ]]
+	then
+  echo -e "gh-cli ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall gh
+fi
+
+if [[ `which checkov` ]]
+	then
+  echo -e "checkov ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall checkov
+fi
+
+if [[ `which trufflehog` ]]
+	then
+  echo -e "trufflehog ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall trufflehog
+fi
+
+if [[ `which trunk` ]]
+	then
+  echo -e "trunk-io ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall trunk-io
+fi
+
+if [[ `which docker-compose` ]]
+	then
+  echo -e "docker-compose ... ${GREEN} [OK] ${ENDCOLOR}"
+else
+  brew reinstall docker-compose
+  brew reinstall docker-buildx
 fi

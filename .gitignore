@@ -149,8 +149,10 @@ pnpm-lock.yaml
 # binaries
 bin/**/*
 bin
+src/node_modules/**/*
+node_modules/**/*
 
 .devcontainer/trusted_certs.pem
 trusted_certs.pem
-.trunk/**/*
-.trunk
+src/SAST/**/*
+src/SAST

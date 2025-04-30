@@ -5,7 +5,6 @@
 
 Repo Template for Deno
 
-
 ## Binary Distribution
 
 [![Docker Image Version (tag latest semver)](https://img.shields.io/docker/v/lukechannings/deno/latest?label=Docker%20Image)](https://hub.docker.com/r/lynsei/bin/tags)
@@ -13,27 +12,25 @@ Repo Template for Deno
 
 ### Supported Platforms
 
-
 > [!IMPORTANT]
 >
-> The following platforms are *currently* supported:
+> The following platforms are _currently_ supported:
 
-* darwin
-  * amd64
-  * arm64
-* linux
-  * amd64
-  * arm64
-* windows
-  * amd64
-  * -arm64- (unsupported)
+- darwin
+  - amd64
+  - arm64
+- linux
+  - amd64
+  - arm64
+- windows
+  - amd64
+  - -arm64- (unsupported)
 
 ## Index
 
-
-| Command | Purpose |
-| -- | -- |
-| name |  Creates a thing |
+| Command | Purpose            |
+| ------- | ------------------ |
+| name    | Creates a thing    |
 | default | Does another thing |
 
 <!-- github feature -->
@@ -44,12 +41,14 @@ Repo Template for Deno
     ## Hide me
 
     Lots of details
+
 </details>
 
 # Logical Diagram
 
 <!-- github feature -->
 <!-- markdownlint-disable MD046 -->
+
 ```mermaid
 ---
 title: Docker Client

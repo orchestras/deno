@@ -20,8 +20,22 @@ help: ## Print all commands and help info
 
 .DEFAULT_GOAL := help
 
-install-deno: ## Install Template [Deno]!  [ Note: This Clobbers existing files in this directory ]
-	./scripts/template.sh
+install-tools: ## Install SAST Toolchain
+	chmod +x ./scripts/*
+	./scripts/scan.sh
+
+upgrade: ## Pull fresh files from the template repo
+	HOMEDIR=$(make echo-TEMPLATE)
+	chmod +x ./scripts/*
+	./scripts/copy_template.sh
+
+set-version:  ## Set version in deno.json and version.ts from latest git tag
+	./scripts/version.sh
+
+install: ## Install all required SAST tools, hooks, and repository tags, multi-copies, and tags then test & run the code
+	chmod +x ./scripts/*
+	make install-tools
+	make set-version
 	make actions
 	make tag
 	make check
@@ -29,10 +43,19 @@ install-deno: ## Install Template [Deno]!  [ Note: This Clobbers existing files 
 	make run
 	make bump-build
 	cat .semver*
-	echo "--- All Tests Complete ---"
+	@echo "-- Everything is up to date --"
 
-set-version:  ## Set version in deno.json and version.ts from latest git tag
-	./scripts/version.sh
+set-paths:  ## Copy the default template paths for Orchestras into this project
+	chmod +x ./scripts/*
+	./scripts/set_paths.sh
+
+setup-fish: ## Setup Fish shell functions for working with templates
+	chmod +x ./scripts/*
+	./scripts/setup_fish.sh
+
+setup-brew:  ## Install Project Brew Dependencies
+	chmod +x ./scripts/*
+	./scripts/setup_brew.sh
 
 actions:  ## List Github Actions
 	find . -path '*/.github/workflows/*' -type f -name '*.yml' -print0 \
