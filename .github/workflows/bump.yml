@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened]
   push:
     branches:
-      - main  # Versioning occurs on main
+      - main # Versioning occurs on main
 
 jobs:
   versioning:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Ensure versioning works correctly
+          fetch-depth: 0 # Ensure versioning works correctly
 
       - name: Determine Version Bump
         id: version_bump
