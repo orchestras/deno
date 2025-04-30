@@ -1,9 +1,16 @@
 <!-- markdownlint-disable MD041 -->
 <!-- markdownlint-disable MD012 -->
 
-# deno
+# Typescript Edge TEMPLATE
 
-Repo Template for Deno
+## Repository Template for Deno
+
+<<<<<<< HEAD
+[![Docker Image Version (tag latest semver)](https://img.shields.io/badge/CI%20build%20passing-green)](https://hub.docker.com/r/lynsei/devcontainer.deno)
+[![GitHub release (latest SemVer)](https://img.shields.io/badge/github-repo-8A2BE2)](https://github.com/orchestras/deno)
+
+### What is this?
+||||||| a760ae9
 
 ## Binary Distribution
 
@@ -12,9 +19,58 @@ Repo Template for Deno
 
 ### Supported Platforms
 
+
+=======
+## Binary Distribution
+
+[![Docker Image Version (tag latest semver)](https://img.shields.io/docker/v/lukechannings/deno/latest?label=Docker%20Image)](https://hub.docker.com/r/lynsei/bin/tags)
+[![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/lukechannings/deno-arm64?label=ARM64%20Binary)](https://github.com/softdist/docker.client/releases/tag/main)
+
+### Supported Platforms
+>>>>>>> origin/main
+
 > [!IMPORTANT]
 >
+<<<<<<< HEAD
+> This is a microservice template for DENO
+||||||| a760ae9
+> The following platforms are *currently* supported:
+=======
 > The following platforms are _currently_ supported:
+>>>>>>> origin/main
+
+<<<<<<< HEAD
+This project is a re-usable repository template for Typescript using Deno
+deployment environment for edge-compiled applications. It is ideally suited for
+Github actions and composite workflows because it compiles single-purpose binary
+CLIs that are easily released with Brew using a Tap.
+||||||| a760ae9
+* darwin
+  * amd64
+  * arm64
+* linux
+  * amd64
+  * arm64
+* windows
+  * amd64
+  * -arm64- (unsupported)
+=======
+- darwin
+  - amd64
+  - arm64
+- linux
+  - amd64
+  - arm64
+- windows
+  - amd64
+  - -arm64- (unsupported)
+>>>>>>> origin/main
+
+This makes distribution very simple, as any action can re-utilize the homebrew
+tap to install the latest release from Github releases.
+
+<<<<<<< HEAD
+### Supported Platforms
 
 - darwin
   - amd64
@@ -25,24 +81,47 @@ Repo Template for Deno
 - windows
   - amd64
   - -arm64- (unsupported)
+||||||| a760ae9
 
-## Index
-
+| Command | Purpose |
+| -- | -- |
+| name |  Creates a thing |
+| default | Does another thing |
+=======
 | Command | Purpose            |
 | ------- | ------------------ |
 | name    | Creates a thing    |
 | default | Does another thing |
+>>>>>>> origin/main
 
-<!-- github feature -->
-<!-- markdownlint-disable MD033 -->
-<details>
-  <summary>Detailed Information</summary>
+## Features
 
+<<<<<<< HEAD
+| Feature Name       | Purpose                                                                                             |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| LeftHook           | Github pre-commit and push hooks, this is used in place of Husky because it is 12-factor compliant. |
+| Make               | Type 'make' for a list of commands                                                                  |
+| Makefile Tasks     | In place of a complete build system, we use a series of scripts listed in 'scripts' dir             |
+| Deno Version 2.0.2 | See .dvmrc file                                                                                     |
+| Source code        | `src/` directory contains built in auto-versioning                                                  |
+| Release Notes      | release-notes.md file                                                                               |
+| Trufflehog         | See .hogignore file for configuration                                                               |
+| Prettier           | See .prettierignore for config                                                                      |
+| Checkov            | Run `make setup-brew` and `make install-tools`                                                      |
+| Installation       | Run `make install` to create baseline tags and versions and setup the repo for the first time       |
+| Upgrade Templates  | Run `make upgrade` to refresh repository templates automatically                                    |
+||||||| a760ae9
+    ## Hide me
+
+    Lots of details
+</details>
+=======
     ## Hide me
 
     Lots of details
 
 </details>
+>>>>>>> origin/main
 
 # Logical Diagram
 
@@ -51,10 +130,14 @@ Repo Template for Deno
 
 ```mermaid
 ---
-title: Docker Client
+title: Deno Repo Template
 ---
   graph TD;
       deno_code-->release_auto_tag;
       release_auto_tag-->release_build_deno;
       release_build_deno-->release_publish_artifact;
 ```
+
+# LICENSE
+
+MIT License.  © Lynsei Asynynivynya 2025.
