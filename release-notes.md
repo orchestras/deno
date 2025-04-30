@@ -23,8 +23,13 @@ Notes:  This release makes the development experience a lot better moving back a
 - Linux
 - Windows
 - Darwin
+- Linux
+- Windows
+- Darwin
 
 ## Architectures
 
+- ARM64
+- X86_64
 - ARM64
 - X86_64
