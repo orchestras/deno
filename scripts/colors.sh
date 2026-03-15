@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# colors.sh — Terminal color constants
 
 RED="\e[31m"
 GREEN="\e[32m"
@@ -13,19 +14,3 @@ BOLD="\e[1m"
 UNDERLINE="\e[4m"
 FATAL="\e[41m"
 ENDCOLOR="\e[0m"
-
-join_by() {
-  local IFS="$1"
-  shift
-  echo "$*"
-}
-
-# common paths
-path_orchestras=("Documents" "gh" "orchestras" "deno")
-HOMEDIR=$( make echo-TEMPLATE )
-if [[ -z $HOMEDIR ]]
-  then
-    HOMEDIR=$( make echo-TEMPLATE )
-else
-    echo -e "${BLUE}Template Path is:${ENDCOLOR} ${GREEN}${HOMEDIR}${ENDCOLOR}"
-fi

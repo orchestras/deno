@@ -7,10 +7,11 @@ docker-bake.hcl
 .devcontainer/*
 Makefile
 README.md
+AGENTS.md
 release-notes.md
 lefthook.yml
 Dockerfile.package
-.semver*
+mise.toml
 .gitattributes
 scripts/*
 bin/*
