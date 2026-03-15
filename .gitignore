@@ -156,3 +156,10 @@ node_modules/**/*
 trusted_certs.pem
 src/SAST/**/*
 src/SAST
+
+# mise
+.deno-cache/
+.mise/local/
+
+# semver cache (removed — version tracked in deno.json only)
+.semver.*

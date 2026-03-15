@@ -1,0 +1,362 @@
+# mise.toml — project tool versions and tasks
+# Docs: https://mise.jdx.dev/
+# Run `mise tasks` for a full list of available tasks with descriptions.
+# Run `mise run <task>` to execute a task.
+
+[tools]
+deno = "2.0.2"
+
+[env]
+DENO_DIR = "{{config_root}}/.deno-cache"
+
+# ─── Core ────────────────────────────────────────────────────────────────────
+
+[tasks.run]
+description = "Run the Deno application"
+run = "deno run --allow-all ./src/mod.ts"
+
+[tasks.check]
+description = "Type-check the Deno source"
+run = "deno check ./src/mod.ts"
+
+[tasks.lint]
+description = "Lint the source code"
+run = "deno lint"
+
+[tasks.fmt]
+description = "Format the source code"
+run = "deno fmt"
+
+[tasks.test]
+description = "Run the test suite"
+run = "deno test -A"
+
+# ─── Version management ─────────────────────────────────────────────────────
+
+[tasks.version]
+description = "Show current version from deno.json"
+run = """
+#!/usr/bin/env bash
+version=$(jq -r '.version' deno.json)
+echo "Current version: $version"
+"""
+
+[tasks."version:set"]
+description = "Sync version from latest git tag into deno.json and regenerate version.ts"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+tag=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+if [ -z "$tag" ]; then
+  echo "No version tags found — initialising at v0.1.0"
+  tag="v0.1.0"
+fi
+tmp=$(mktemp)
+jq --arg v "$tag" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+deno run --allow-all src/make_version.ts
+echo "Version set to $tag"
+"""
+
+[tasks."version:init"]
+description = "Create initial v0.1.0 tag if no version tags exist"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+existing=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+if [ -n "$existing" ]; then
+  echo "Tags already exist (latest: $existing). Skipping init."
+  exit 0
+fi
+git tag -a v0.1.0 -m "v0.1.0 — initial version"
+echo "Created initial tag v0.1.0"
+"""
+
+# ─── Bump commands (separate tagging from bumping) ──────────────────────────
+# These update deno.json + version.ts, commit, but do NOT push the tag.
+# Use `mise run tag:push` after all commits are pushed.
+
+[tasks."bump:build"]
+description = "Bump build metadata (random build number)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+source ./scripts/colors.sh 2>/dev/null || true
+
+current=$(jq -r '.version' deno.json | sed 's/^v//')
+base=$(echo "$current" | cut -d'+' -f1)
+build_num=$(shuf -i 10000-99999 -n 1)
+new_version="v${base}+${build_num}"
+
+tmp=$(mktemp)
+jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+deno run --allow-all src/make_version.ts
+
+echo "Bumped to $new_version"
+"""
+
+[tasks."bump:patch"]
+description = "Bump patch version (e.g. 0.1.0 → 0.1.1)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+current=$(jq -r '.version' deno.json | sed 's/^v//')
+base=$(echo "$current" | cut -d'+' -f1 | cut -d'-' -f1)
+IFS='.' read -r major minor patch <<< "$base"
+patch=$((patch + 1))
+new_version="v${major}.${minor}.${patch}"
+
+tmp=$(mktemp)
+jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+deno run --allow-all src/make_version.ts
+
+echo "Bumped to $new_version"
+"""
+
+[tasks."bump:minor"]
+description = "Bump minor version (e.g. 0.1.0 → 0.2.0)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+current=$(jq -r '.version' deno.json | sed 's/^v//')
+base=$(echo "$current" | cut -d'+' -f1 | cut -d'-' -f1)
+IFS='.' read -r major minor patch <<< "$base"
+minor=$((minor + 1))
+new_version="v${major}.${minor}.0"
+
+tmp=$(mktemp)
+jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+deno run --allow-all src/make_version.ts
+
+echo "Bumped to $new_version"
+"""
+
+[tasks."bump:major"]
+description = "Bump major version (e.g. 0.1.0 → 1.0.0)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+current=$(jq -r '.version' deno.json | sed 's/^v//')
+base=$(echo "$current" | cut -d'+' -f1 | cut -d'-' -f1)
+IFS='.' read -r major minor patch <<< "$base"
+major=$((major + 1))
+new_version="v${major}.0.0"
+
+tmp=$(mktemp)
+jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+deno run --allow-all src/make_version.ts
+
+echo "Bumped to $new_version"
+"""
+
+# ─── Tagging (always done after push) ───────────────────────────────────────
+
+[tasks."tag:create"]
+description = "Create a git tag from the current deno.json version"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+version=$(jq -r '.version' deno.json)
+echo "Creating tag: $version"
+git tag -a "$version" -m "$version"
+echo "Tag $version created (not pushed). Run 'mise run tag:push' to push."
+"""
+
+[tasks."tag:push"]
+description = "Push all tags to origin"
+run = "git push origin --tags"
+
+[tasks."tag:list"]
+description = "List all version tags"
+run = "git tag -l 'v*' --sort=-v:refname"
+
+# ─── Git workflow (linear rebase model) ─────────────────────────────────────
+
+[tasks."git:promote"]
+description = "Promote develop → main via fast-forward (rebase if needed)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+current_branch=$(git branch --show-current)
+
+echo "Fetching latest..."
+git fetch origin
+
+echo "Checking out main and rebasing develop..."
+git checkout main
+git pull origin main --rebase
+git merge --ff-only origin/develop || {
+  echo "Fast-forward failed. Rebasing develop onto main..."
+  git checkout develop
+  git rebase main
+  git push origin develop --force-with-lease
+  git checkout main
+  git merge --ff-only develop
+}
+
+git push origin main
+echo "✓ develop promoted to main"
+
+git checkout "$current_branch"
+"""
+
+[tasks."git:rebase"]
+description = "Rebase current branch onto develop"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+git fetch origin
+git rebase origin/develop
+echo "✓ Rebased onto develop"
+"""
+
+# ─── Build ───────────────────────────────────────────────────────────────────
+
+[tasks.build]
+description = "Build version.ts from deno.json version"
+run = "deno run --allow-all src/make_version.ts"
+
+[tasks.compile]
+description = "Compile cross-platform binaries"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p bin
+deno compile --allow-all --no-check --target aarch64-apple-darwin --output ./bin/aarch64-apple-darwin/mod ./src/mod.ts
+deno compile --allow-all --no-check --target x86_64-apple-darwin --output ./bin/x86_64-apple-darwin/mod ./src/mod.ts
+deno compile --allow-all --no-check --target x86_64-unknown-linux-gnu --output ./bin/x86_64-unknown-linux-gnu/mod ./src/mod.ts
+deno compile --allow-all --no-check --target aarch64-unknown-linux-gnu --output ./bin/aarch64-unknown-linux-gnu/mod ./src/mod.ts
+echo "✓ Binaries compiled to ./bin/"
+"""
+
+# ─── Secrets & Transcrypt ───────────────────────────────────────────────────
+
+[tasks."secrets:init"]
+description = "Bootstrap transcrypt: auto-configure from repo secret or create new"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+source ./scripts/transcrypt_bootstrap.sh
+transcrypt_bootstrap
+"""
+
+[tasks."secrets:resolve"]
+description = "Resolve secrets using Conjur → Azure Key Vault → env vars/inputs chain"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+source ./scripts/resolve_secrets.sh
+resolve_secrets "$@"
+"""
+
+# ─── Setup & Init ───────────────────────────────────────────────────────────
+
+[tasks.init]
+description = "Full project initialisation (install deps, bootstrap secrets, set version)"
+depends = ["secrets:init", "version:init", "version:set"]
+run = """
+#!/usr/bin/env bash
+echo ""
+echo "✓ Project initialised. Run 'mise run help' to see available tasks."
+"""
+
+[tasks.setup]
+description = "Install mise shell completions for bash, zsh, and fish"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Installing mise shell completions..."
+
+# Bash
+if [ -d /etc/bash_completion.d ]; then
+  mise completion bash > /etc/bash_completion.d/mise 2>/dev/null || \
+  mise completion bash > ~/.local/share/bash-completion/completions/mise 2>/dev/null || true
+  echo "  ✓ bash completions installed"
+elif [ -d ~/.local/share/bash-completion/completions ]; then
+  mkdir -p ~/.local/share/bash-completion/completions
+  mise completion bash > ~/.local/share/bash-completion/completions/mise
+  echo "  ✓ bash completions installed"
+else
+  echo "  ⚠ bash completion directory not found, skipping"
+fi
+
+# Zsh
+if [ -d /usr/local/share/zsh/site-functions ]; then
+  mise completion zsh > /usr/local/share/zsh/site-functions/_mise 2>/dev/null || true
+  echo "  ✓ zsh completions installed"
+elif [ -d ~/.zsh/completions ]; then
+  mise completion zsh > ~/.zsh/completions/_mise
+  echo "  ✓ zsh completions installed"
+else
+  mkdir -p ~/.zsh/completions
+  mise completion zsh > ~/.zsh/completions/_mise 2>/dev/null || true
+  echo "  ✓ zsh completions installed to ~/.zsh/completions"
+fi
+
+# Fish
+if command -v fish &>/dev/null; then
+  fish_comp_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
+  mkdir -p "$fish_comp_dir"
+  mise completion fish > "$fish_comp_dir/mise.fish"
+  echo "  ✓ fish completions installed"
+else
+  echo "  ⚠ fish not found, skipping fish completions"
+fi
+
+echo ""
+echo "Completions installed. Restart your shell or run 'source ~/.bashrc' to activate."
+echo "Use 'mise tasks' for auto-documented task list."
+"""
+
+[tasks.help]
+description = "Show all available tasks with descriptions"
+run = """
+#!/usr/bin/env bash
+echo ""
+echo "Available tasks (run with: mise run <task>):"
+echo "─────────────────────────────────────────────"
+mise tasks 2>/dev/null || echo "Run 'mise tasks' directly for task list"
+echo ""
+echo "Tip: Use 'mise run <task> --help' for task-specific help."
+echo "     Use 'mise completion <shell>' for shell completions."
+"""
+
+# ─── CI helpers ──────────────────────────────────────────────────────────────
+
+[tasks."ci:lint"]
+description = "CI lint check"
+run = "deno lint"
+
+[tasks."ci:check"]
+description = "CI type check"
+run = "deno check ./src/mod.ts"
+
+[tasks."ci:test"]
+description = "CI test run"
+run = "deno test -A"
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+
+[tasks."docker:build"]
+description = "Build the release Docker image"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+version=$(jq -r '.version' deno.json)
+docker buildx bake package --set "package.args.TAG=$version"
+"""
+
+[tasks."docker:push"]
+description = "Push Docker image to registry"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+version=$(jq -r '.version' deno.json)
+repo="${DOCKER_REPO:-lynsei}"
+program="${DOCKER_PROGRAM:-orchestras}"
+docker push "${repo}/${program}:${version}"
+"""

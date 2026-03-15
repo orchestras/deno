@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-check-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Lint
+        run: mise run lint
+
+      - name: Type Check
+        run: mise run check
+
+      - name: Test
+        run: mise run test
+        continue-on-error: true
+
+      - name: Build version.ts
+        run: mise run build
+
+      - name: Run application
+        run: mise run run

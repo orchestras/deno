@@ -1,0 +1,118 @@
+name: Push Docker Image to Artifactory
+
+on:
+  workflow_dispatch:
+    inputs:
+      secret_provider:
+        description: "Secret provider"
+        required: true
+        type: choice
+        options:
+          - conjur
+          - azure
+          - inputs
+        default: conjur
+      artifactory_url:
+        description: "Artifactory Docker registry URL (if using inputs)"
+        required: false
+      artifactory_user:
+        description: "Artifactory user (if using inputs)"
+        required: false
+      artifactory_key:
+        description: "Artifactory API key (if using inputs)"
+        required: false
+      image_name:
+        description: "Docker image name (e.g. orchestras/mod)"
+        required: true
+      image_tag:
+        description: "Image tag (defaults to version from deno.json)"
+        required: false
+      docker_repo:
+        description: "Artifactory Docker repository"
+        required: true
+        default: "docker-dev-local"
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    env:
+      CONJUR_API_KEY: ${{ secrets.CONJUR_API_KEY }}
+      CONJUR_URL: ${{ vars.CONJUR_URL }}
+      CONJUR_SAFE: ${{ vars.CONJUR_SAFE }}
+      AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME }}
+      SECRET_PROVIDER: ${{ inputs.secret_provider }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Resolve Artifactory Credentials
+        id: creds
+        run: |
+          source ./scripts/resolve_secrets.sh
+
+          RT_URL="" RT_USER="" RT_KEY=""
+
+          case "$SECRET_PROVIDER" in
+            conjur)
+              RT_URL=$(resolve_single_secret "artifactory/docker_url" conjur) || true
+              RT_USER=$(resolve_single_secret "artifactory/user" conjur) || true
+              RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur) || true
+              ;;
+            azure)
+              RT_URL=$(resolve_single_secret "artifactory-docker-url" azure) || true
+              RT_USER=$(resolve_single_secret "artifactory-user" azure) || true
+              RT_KEY=$(resolve_single_secret "artifactory-api-key" azure) || true
+              ;;
+          esac
+
+          RT_URL="${RT_URL:-${{ inputs.artifactory_url }}}"
+          RT_USER="${RT_USER:-${{ inputs.artifactory_user }}}"
+          RT_KEY="${RT_KEY:-${{ inputs.artifactory_key }}}"
+
+          if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
+            echo "::error::Failed to resolve Artifactory credentials"
+            exit 1
+          fi
+
+          echo "rt_url=$RT_URL" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$RT_USER"
+          echo "::add-mask::$RT_KEY"
+          echo "rt_user=$RT_USER" >> "$GITHUB_OUTPUT"
+          echo "rt_key=$RT_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(jq -r '.version' deno.json)
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        run: |
+          docker build -t "${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}" -f Dockerfile.package .
+
+      - name: Login to Artifactory Docker Registry
+        env:
+          RT_URL: ${{ steps.creds.outputs.rt_url }}
+          RT_USER: ${{ steps.creds.outputs.rt_user }}
+          RT_KEY: ${{ steps.creds.outputs.rt_key }}
+        run: |
+          echo "$RT_KEY" | docker login "$RT_URL" -u "$RT_USER" --password-stdin
+
+      - name: Tag and Push
+        env:
+          RT_URL: ${{ steps.creds.outputs.rt_url }}
+        run: |
+          FULL_IMAGE="${RT_URL}/${{ inputs.docker_repo }}/${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}"
+          docker tag "${{ inputs.image_name }}:${{ steps.tag.outputs.tag }}" "$FULL_IMAGE"
+          docker push "$FULL_IMAGE"
+          echo "✓ Pushed $FULL_IMAGE"

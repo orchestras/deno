@@ -1,0 +1,118 @@
+name: Push Binary to Artifactory
+
+on:
+  workflow_dispatch:
+    inputs:
+      secret_provider:
+        description: "Secret provider"
+        required: true
+        type: choice
+        options:
+          - conjur
+          - azure
+          - inputs
+        default: conjur
+      artifactory_url:
+        description: "Artifactory URL (if using inputs provider)"
+        required: false
+      artifactory_user:
+        description: "Artifactory user (if using inputs provider)"
+        required: false
+      artifactory_key:
+        description: "Artifactory API key (if using inputs provider)"
+        required: false
+      artifactory_repo:
+        description: "Artifactory repository name"
+        required: true
+        default: "deno-binaries-dev"
+      binary_path:
+        description: "Path to binary artifact(s)"
+        required: true
+        default: "bin/"
+      artifact_folder:
+        description: "Target folder in Artifactory"
+        required: true
+        default: "orchestras/"
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    env:
+      CONJUR_API_KEY: ${{ secrets.CONJUR_API_KEY }}
+      CONJUR_URL: ${{ vars.CONJUR_URL }}
+      CONJUR_SAFE: ${{ vars.CONJUR_SAFE }}
+      AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME }}
+      SECRET_PROVIDER: ${{ inputs.secret_provider }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Resolve Artifactory Credentials
+        id: creds
+        run: |
+          source ./scripts/resolve_secrets.sh
+
+          RT_URL=""
+          RT_USER=""
+          RT_KEY=""
+
+          case "$SECRET_PROVIDER" in
+            conjur)
+              echo "Resolving from Conjur..."
+              RT_URL=$(resolve_single_secret "artifactory/url" conjur) || true
+              RT_USER=$(resolve_single_secret "artifactory/user" conjur) || true
+              RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur) || true
+              ;;
+            azure)
+              echo "Resolving from Azure Key Vault..."
+              RT_URL=$(resolve_single_secret "artifactory-url" azure) || true
+              RT_USER=$(resolve_single_secret "artifactory-user" azure) || true
+              RT_KEY=$(resolve_single_secret "artifactory-api-key" azure) || true
+              ;;
+          esac
+
+          # Fallback to inputs/env vars
+          RT_URL="${RT_URL:-${{ inputs.artifactory_url }}}"
+          RT_USER="${RT_USER:-${{ inputs.artifactory_user }}}"
+          RT_KEY="${RT_KEY:-${{ inputs.artifactory_key }}}"
+
+          if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
+            echo "::error::Failed to resolve Artifactory credentials from provider '$SECRET_PROVIDER' and inputs"
+            exit 1
+          fi
+
+          echo "rt_url=$RT_URL" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$RT_USER"
+          echo "::add-mask::$RT_KEY"
+          echo "rt_user=$RT_USER" >> "$GITHUB_OUTPUT"
+          echo "rt_key=$RT_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+
+      - name: Configure & Push
+        env:
+          RT_URL: ${{ steps.creds.outputs.rt_url }}
+          RT_USER: ${{ steps.creds.outputs.rt_user }}
+          RT_KEY: ${{ steps.creds.outputs.rt_key }}
+        run: |
+          jf config add rt-server \
+            --url="$RT_URL" \
+            --user="$RT_USER" \
+            --apikey="$RT_KEY" \
+            --interactive=false
+
+          jf rt upload \
+            "${{ inputs.binary_path }}" \
+            "${{ inputs.artifactory_repo }}/${{ inputs.artifact_folder }}" \
+            --server-id=rt-server \
+            --flat=false
+
+          echo "✓ Binary pushed to ${{ inputs.artifactory_repo }}/${{ inputs.artifact_folder }}"

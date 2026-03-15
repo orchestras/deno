@@ -1,0 +1,149 @@
+name: Promote Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      secret_provider:
+        description: "Secret provider"
+        required: true
+        type: choice
+        options:
+          - conjur
+          - azure
+          - inputs
+        default: conjur
+      artifactory_url:
+        description: "Artifactory Docker registry URL (if using inputs)"
+        required: false
+      artifactory_user:
+        description: "Artifactory user (if using inputs)"
+        required: false
+      artifactory_key:
+        description: "Artifactory API key (if using inputs)"
+        required: false
+      promotion:
+        description: "Promotion stage"
+        required: true
+        type: choice
+        options:
+          - dev-to-uat
+          - uat-to-prod
+      image_name:
+        description: "Docker image name (e.g. orchestras/mod)"
+        required: true
+      image_tag:
+        description: "Image tag to promote"
+        required: true
+      source_repo:
+        description: "Source Docker repo (auto-set from promotion stage)"
+        required: false
+      target_repo:
+        description: "Target Docker repo (auto-set from promotion stage)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    env:
+      CONJUR_API_KEY: ${{ secrets.CONJUR_API_KEY }}
+      CONJUR_URL: ${{ vars.CONJUR_URL }}
+      CONJUR_SAFE: ${{ vars.CONJUR_SAFE }}
+      AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME }}
+      SECRET_PROVIDER: ${{ inputs.secret_provider }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate promotion path
+        id: repos
+        run: |
+          case "${{ inputs.promotion }}" in
+            dev-to-uat)
+              SRC="${{ inputs.source_repo }}"
+              TGT="${{ inputs.target_repo }}"
+              SRC="${SRC:-docker-dev-local}"
+              TGT="${TGT:-docker-uat-local}"
+              ;;
+            uat-to-prod)
+              SRC="${{ inputs.source_repo }}"
+              TGT="${{ inputs.target_repo }}"
+              SRC="${SRC:-docker-uat-local}"
+              TGT="${TGT:-docker-prod-local}"
+              ;;
+            *)
+              echo "::error::Invalid promotion. Must be dev-to-uat or uat-to-prod."
+              exit 1
+              ;;
+          esac
+          echo "source=$SRC" >> "$GITHUB_OUTPUT"
+          echo "target=$TGT" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve Artifactory Credentials
+        id: creds
+        run: |
+          source ./scripts/resolve_secrets.sh
+
+          RT_URL="" RT_USER="" RT_KEY=""
+
+          case "$SECRET_PROVIDER" in
+            conjur)
+              RT_URL=$(resolve_single_secret "artifactory/docker_url" conjur) || true
+              RT_USER=$(resolve_single_secret "artifactory/user" conjur) || true
+              RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur) || true
+              ;;
+            azure)
+              RT_URL=$(resolve_single_secret "artifactory-docker-url" azure) || true
+              RT_USER=$(resolve_single_secret "artifactory-user" azure) || true
+              RT_KEY=$(resolve_single_secret "artifactory-api-key" azure) || true
+              ;;
+          esac
+
+          RT_URL="${RT_URL:-${{ inputs.artifactory_url }}}"
+          RT_USER="${RT_USER:-${{ inputs.artifactory_user }}}"
+          RT_KEY="${RT_KEY:-${{ inputs.artifactory_key }}}"
+
+          if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
+            echo "::error::Failed to resolve Artifactory credentials"
+            exit 1
+          fi
+
+          echo "rt_url=$RT_URL" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$RT_USER"
+          echo "::add-mask::$RT_KEY"
+          echo "rt_user=$RT_USER" >> "$GITHUB_OUTPUT"
+          echo "rt_key=$RT_KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Artifactory Registry
+        env:
+          RT_URL: ${{ steps.creds.outputs.rt_url }}
+          RT_USER: ${{ steps.creds.outputs.rt_user }}
+          RT_KEY: ${{ steps.creds.outputs.rt_key }}
+        run: |
+          echo "$RT_KEY" | docker login "$RT_URL" -u "$RT_USER" --password-stdin
+
+      - name: Pull, Re-tag, and Push (copy promotion)
+        env:
+          RT_URL: ${{ steps.creds.outputs.rt_url }}
+        run: |
+          SRC="${{ steps.repos.outputs.source }}"
+          TGT="${{ steps.repos.outputs.target }}"
+          IMG="${{ inputs.image_name }}"
+          TAG="${{ inputs.image_tag }}"
+
+          SRC_FULL="${RT_URL}/${SRC}/${IMG}:${TAG}"
+          TGT_FULL="${RT_URL}/${TGT}/${IMG}:${TAG}"
+
+          echo "Pulling ${SRC_FULL}..."
+          docker pull "$SRC_FULL"
+
+          echo "Re-tagging → ${TGT_FULL}..."
+          docker tag "$SRC_FULL" "$TGT_FULL"
+
+          echo "Pushing ${TGT_FULL}..."
+          docker push "$TGT_FULL"
+
+          echo "✓ Promoted ${SRC}/${IMG}:${TAG} → ${TGT}/${IMG}:${TAG}"
