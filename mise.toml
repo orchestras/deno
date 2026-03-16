@@ -6,6 +6,7 @@
 [tools]
 deno = "2.0.2"
 node = "22"
+delta = "latest"
 
 [env]
 DENO_DIR = "{{config_root}}/.deno-cache"
@@ -259,6 +260,37 @@ echo "✓ Tags synced with remote"
 git tag -l 'v*' --sort=-v:refname
 """
 
+# ─── Git config ──────────────────────────────────────────────────────────────
+
+[tasks."git:config"]
+description = "Configure local git repo (delta pager, gpg signing, rebase-only, hooks path)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Delta pager
+git config --local core.pager delta
+git config --local interactive.diffFilter 'delta --color-only'
+git config --local delta.navigate true
+git config --local delta.dark true
+git config --local delta.side-by-side true
+git config --local merge.conflictStyle zdiff3
+
+# Signing
+git config --local commit.gpgsign true
+git config --local tag.gpgSign true
+
+# Hooks
+git config --local core.hooksPath config/githooks/hooks
+
+# Rebase-only workflow
+git config --local pull.rebase true
+git config --local merge.ff only
+git config --local rebase.autoStash true
+
+echo "✓ Local git config applied (delta, gpg signing, rebase-only, hooks path)"
+"""
+
 # ─── VCS workflow ────────────────────────────────────────────────────────────
 
 [tasks."vcs:release"]
@@ -455,8 +487,8 @@ resolve_secrets "$@"
 # ─── Setup & Init ───────────────────────────────────────────────────────────
 
 [tasks."project:init"]
-description = "Full project init: clean tags, fetch remote, sync version, bootstrap secrets"
-depends = ["tag:sync", "version:init", "version:sync", "secrets:init"]
+description = "Full project init: git config, sync tags, set version, bootstrap secrets"
+depends = ["git:config", "tag:sync", "version:init", "version:sync", "secrets:init"]
 run = """
 #!/usr/bin/env bash
 echo ""
