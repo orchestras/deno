@@ -4,42 +4,57 @@
 
 ### Overview
 
-This is a Deno v2.0.2 TypeScript template repository (`@softdist/orchestras`) managed by **mise en place**. All tools and tasks are defined in `mise.toml`. The main entrypoint is `src/mod.ts`.
+Deno v2.0.2 TypeScript template (`@softdist/orchestras`) managed by **mise en
+place**. All tools and tasks are in `mise.toml`. Main entrypoint: `src/mod.ts`.
 
 ### Tool management
 
-Tools are managed by [mise](https://mise.jdx.dev/). Run `mise install` to install Deno and any other tools. Ensure `~/.local/bin` is on `PATH`. The old `.dvmrc` has been replaced by `mise.toml`.
+Tools managed by [mise](https://mise.jdx.dev/). Run `mise install` to install
+Deno 2.0.2 and Node 22. Ensure `~/.local/bin` is on `PATH`.
 
 ### Running tasks
 
-Use `mise run <task>` or the auto-delegating `make <target>` (dashes map to colons: `make bump-patch` → `mise run bump:patch`). Run `mise tasks` for the full list.
+Use `mise run <task>` or the auto-delegating `make <target>` (dashes→colons:
+`make bump-patch` → `mise run bump:patch`). Run `mise tasks` for the full list.
 
 ### Key commands
 
 ```sh
-mise run lint           # lint
-mise run check          # type-check
-mise run test           # tests (currently empty in template — "No test modules found" is expected)
-mise run run            # run application
-mise run build          # regenerate version.ts
-mise run bump:patch     # bump version (also: bump:minor, bump:major, bump:build)
-mise run tag:create     # create git tag from deno.json version
-mise run tag:push       # push tags to origin
-mise run git:promote    # fast-forward main to develop
+mise run lint             # lint
+mise run check            # type-check
+mise run test             # tests (template has no test modules — "No test modules found" is expected)
+mise run run              # run application
+mise run build            # regenerate version.ts
+mise run bump:patch       # bump version (also: bump:minor, bump:major, bump:build)
+mise run tag:create       # create git tag from deno.json version
+mise run tag:push         # push tags → triggers release
+mise run vcs:promote      # fast-forward main to develop (VCS promotion)
+mise run vcs:set-default-branch  # set develop as default branch on GitHub
+mise run npm:set-registry # point npm at Artifactory
 ```
+
+### Two kinds of promotion
+
+- **VCS promotion** = moving code between branches: `feature/*` → `develop` →
+  `main`
+- **Artifactory promotion** = copying build artifacts between Artifactory repos:
+  `dev` → `uat` → `prod`
+
+These are completely separate concepts. VCS promotion uses
+`mise run vcs:promote`. Artifactory promotion uses GitHub Actions workflow
+dispatch.
 
 ### Version management
 
-Version is tracked only in `deno.json` and `src/version.ts` (auto-generated). The old `.semver.*` flat files have been removed. Bump commands update the version but **do not** create or push tags — use `tag:create` then `tag:push` separately after all commits are pushed.
-
-### Branch model
-
-Uses a linear rebase model: `feature/* → develop → main`. Use `mise run git:promote` to fast-forward main to develop.
+Version tracked only in `deno.json` + `src/version.ts`. Bump commands update the
+version but do NOT create tags — use `tag:create` + `tag:push` separately.
 
 ### Lefthook hooks
 
-Pre-commit and pre-push hooks run via `mise run lint` and `mise run run`. Use `LEFTHOOK=0` to skip hooks when needed in this cloud environment.
+Pre-commit/pre-push hooks use `mise run lint` and `mise run run`. Use
+`LEFTHOOK=0` to skip in this cloud environment.
 
-### Transcrypt / .envcrypt
+### Secret resolution
 
-The Makefile no longer includes `.envcrypt`. Transcrypt is bootstrapped via `mise run secrets:init`. If `transcrypt` is not installed, the bootstrap gracefully skips.
+Conjur (if `CONJUR_API_KEY` exists) → env vars/inputs. See
+`scripts/resolve_secrets.sh`.

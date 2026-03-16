@@ -1,26 +1,15 @@
-name: Promote Docker Image
+name: "Artifactory: Promote Docker Image"
+
+# Copies a Docker image between Artifactory Docker repositories.
+# Promotion is always a COPY (not move) and must follow:
+#   docker-dev → docker-uat → docker-prod  (no skipping stages)
+#
+# Uses JFrog CLI `jf rt docker-promote` to copy images within
+# Artifactory without pulling/pushing through the Docker daemon.
 
 on:
   workflow_dispatch:
     inputs:
-      secret_provider:
-        description: "Secret provider"
-        required: true
-        type: choice
-        options:
-          - conjur
-          - azure
-          - inputs
-        default: conjur
-      artifactory_url:
-        description: "Artifactory Docker registry URL (if using inputs)"
-        required: false
-      artifactory_user:
-        description: "Artifactory user (if using inputs)"
-        required: false
-      artifactory_key:
-        description: "Artifactory API key (if using inputs)"
-        required: false
       promotion:
         description: "Promotion stage"
         required: true
@@ -35,10 +24,19 @@ on:
         description: "Image tag to promote"
         required: true
       source_repo:
-        description: "Source Docker repo (auto-set from promotion stage)"
+        description: "Override source Docker repo (default auto-set)"
         required: false
       target_repo:
-        description: "Target Docker repo (auto-set from promotion stage)"
+        description: "Override target Docker repo (default auto-set)"
+        required: false
+      artifactory_url:
+        description: "Artifactory base URL (fallback if not in Conjur)"
+        required: false
+      artifactory_user:
+        description: "Artifactory user (fallback if not in Conjur)"
+        required: false
+      artifactory_key:
+        description: "Artifactory API key (fallback if not in Conjur)"
         required: false
 
 permissions:
@@ -51,63 +49,49 @@ jobs:
       CONJUR_API_KEY: ${{ secrets.CONJUR_API_KEY }}
       CONJUR_URL: ${{ vars.CONJUR_URL }}
       CONJUR_SAFE: ${{ vars.CONJUR_SAFE }}
-      AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME }}
-      SECRET_PROVIDER: ${{ inputs.secret_provider }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate promotion path
+      - name: Determine source and target repos
         id: repos
         run: |
           case "${{ inputs.promotion }}" in
             dev-to-uat)
               SRC="${{ inputs.source_repo }}"
               TGT="${{ inputs.target_repo }}"
-              SRC="${SRC:-docker-dev-local}"
-              TGT="${TGT:-docker-uat-local}"
+              echo "source=${SRC:-docker-dev-local}" >> "$GITHUB_OUTPUT"
+              echo "target=${TGT:-docker-uat-local}" >> "$GITHUB_OUTPUT"
               ;;
             uat-to-prod)
               SRC="${{ inputs.source_repo }}"
               TGT="${{ inputs.target_repo }}"
-              SRC="${SRC:-docker-uat-local}"
-              TGT="${TGT:-docker-prod-local}"
-              ;;
-            *)
-              echo "::error::Invalid promotion. Must be dev-to-uat or uat-to-prod."
-              exit 1
+              echo "source=${SRC:-docker-uat-local}" >> "$GITHUB_OUTPUT"
+              echo "target=${TGT:-docker-prod-local}" >> "$GITHUB_OUTPUT"
               ;;
           esac
-          echo "source=$SRC" >> "$GITHUB_OUTPUT"
-          echo "target=$TGT" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve Artifactory Credentials
+      - name: Resolve Artifactory credentials
         id: creds
         run: |
           source ./scripts/resolve_secrets.sh
 
           RT_URL="" RT_USER="" RT_KEY=""
 
-          case "$SECRET_PROVIDER" in
-            conjur)
-              RT_URL=$(resolve_single_secret "artifactory/docker_url" conjur) || true
-              RT_USER=$(resolve_single_secret "artifactory/user" conjur) || true
-              RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur) || true
-              ;;
-            azure)
-              RT_URL=$(resolve_single_secret "artifactory-docker-url" azure) || true
-              RT_USER=$(resolve_single_secret "artifactory-user" azure) || true
-              RT_KEY=$(resolve_single_secret "artifactory-api-key" azure) || true
-              ;;
-          esac
+          if [ -n "${CONJUR_API_KEY:-}" ]; then
+            echo "Resolving credentials from Conjur..."
+            RT_URL=$(resolve_single_secret "artifactory/url" conjur 2>/dev/null) || true
+            RT_USER=$(resolve_single_secret "artifactory/user" conjur 2>/dev/null) || true
+            RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur 2>/dev/null) || true
+          fi
 
           RT_URL="${RT_URL:-${{ inputs.artifactory_url }}}"
           RT_USER="${RT_USER:-${{ inputs.artifactory_user }}}"
           RT_KEY="${RT_KEY:-${{ inputs.artifactory_key }}}"
 
           if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
-            echo "::error::Failed to resolve Artifactory credentials"
+            echo "::error::Could not resolve Artifactory credentials."
             exit 1
           fi
 
@@ -117,33 +101,33 @@ jobs:
           echo "rt_user=$RT_USER" >> "$GITHUB_OUTPUT"
           echo "rt_key=$RT_KEY" >> "$GITHUB_OUTPUT"
 
-      - name: Login to Artifactory Registry
+      - name: Setup JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+
+      - name: Promote Docker image within Artifactory
         env:
           RT_URL: ${{ steps.creds.outputs.rt_url }}
           RT_USER: ${{ steps.creds.outputs.rt_user }}
           RT_KEY: ${{ steps.creds.outputs.rt_key }}
         run: |
-          echo "$RT_KEY" | docker login "$RT_URL" -u "$RT_USER" --password-stdin
+          jf config add rt-server \
+            --url="$RT_URL" \
+            --user="$RT_USER" \
+            --apikey="$RT_KEY" \
+            --interactive=false
 
-      - name: Pull, Re-tag, and Push (copy promotion)
-        env:
-          RT_URL: ${{ steps.creds.outputs.rt_url }}
-        run: |
           SRC="${{ steps.repos.outputs.source }}"
           TGT="${{ steps.repos.outputs.target }}"
           IMG="${{ inputs.image_name }}"
           TAG="${{ inputs.image_tag }}"
 
-          SRC_FULL="${RT_URL}/${SRC}/${IMG}:${TAG}"
-          TGT_FULL="${RT_URL}/${TGT}/${IMG}:${TAG}"
+          echo "Promoting: ${SRC}/${IMG}:${TAG} → ${TGT}/${IMG}:${TAG}"
 
-          echo "Pulling ${SRC_FULL}..."
-          docker pull "$SRC_FULL"
+          # Copy (not move) the Docker image between repos in Artifactory
+          jf rt docker-promote "$IMG" "$SRC" "$TGT" \
+            --server-id=rt-server \
+            --source-tag="$TAG" \
+            --target-tag="$TAG" \
+            --copy
 
-          echo "Re-tagging → ${TGT_FULL}..."
-          docker tag "$SRC_FULL" "$TGT_FULL"
-
-          echo "Pushing ${TGT_FULL}..."
-          docker push "$TGT_FULL"
-
-          echo "✓ Promoted ${SRC}/${IMG}:${TAG} → ${TGT}/${IMG}:${TAG}"
+          echo "✓ Promoted ${IMG}:${TAG} from ${SRC} → ${TGT}"

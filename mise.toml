@@ -5,6 +5,7 @@
 
 [tools]
 deno = "2.0.2"
+node = "22"
 
 [env]
 DENO_DIR = "{{config_root}}/.deno-cache"
@@ -26,6 +27,10 @@ run = "deno lint"
 [tasks.fmt]
 description = "Format the source code"
 run = "deno fmt"
+
+[tasks."fmt:check"]
+description = "Check formatting without writing"
+run = "deno fmt --check"
 
 [tasks.test]
 description = "Run the test suite"
@@ -71,16 +76,16 @@ git tag -a v0.1.0 -m "v0.1.0 — initial version"
 echo "Created initial tag v0.1.0"
 """
 
-# ─── Bump commands (separate tagging from bumping) ──────────────────────────
-# These update deno.json + version.ts, commit, but do NOT push the tag.
-# Use `mise run tag:push` after all commits are pushed.
+# ─── Bump commands ──────────────────────────────────────────────────────────
+# These update deno.json + version.ts but do NOT create or push git tags.
+# Use `mise run tag:create` + `mise run tag:push` separately after all
+# commits are pushed.
 
 [tasks."bump:build"]
 description = "Bump build metadata (random build number)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-source ./scripts/colors.sh 2>/dev/null || true
 
 current=$(jq -r '.version' deno.json | sed 's/^v//')
 base=$(echo "$current" | cut -d'+' -f1)
@@ -151,7 +156,7 @@ deno run --allow-all src/make_version.ts
 echo "Bumped to $new_version"
 """
 
-# ─── Tagging (always done after push) ───────────────────────────────────────
+# ─── Tagging (always done after all commits are pushed) ─────────────────────
 
 [tasks."tag:create"]
 description = "Create a git tag from the current deno.json version"
@@ -161,7 +166,7 @@ set -euo pipefail
 version=$(jq -r '.version' deno.json)
 echo "Creating tag: $version"
 git tag -a "$version" -m "$version"
-echo "Tag $version created (not pushed). Run 'mise run tag:push' to push."
+echo "Tag $version created locally. Run 'mise run tag:push' to push."
 """
 
 [tasks."tag:push"]
@@ -172,24 +177,29 @@ run = "git push origin --tags"
 description = "List all version tags"
 run = "git tag -l 'v*' --sort=-v:refname"
 
-# ─── Git workflow (linear rebase model) ─────────────────────────────────────
+# ─── VCS workflow (linear rebase model) ─────────────────────────────────────
+# VCS promotion: feature/* → develop (via PR rebase) → main (linear rebase)
+# This is separate from Artifactory promotion (dev → uat → prod).
 
-[tasks."git:promote"]
-description = "Promote develop → main via fast-forward (rebase if needed)"
+[tasks."vcs:promote"]
+description = "Promote develop → main (linear rebase fast-forward)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 
 current_branch=$(git branch --show-current)
 
-echo "Fetching latest..."
+echo "Fetching latest from origin..."
 git fetch origin
 
-echo "Checking out main and rebasing develop..."
+echo "Checking out main..."
 git checkout main
 git pull origin main --rebase
+
+echo "Merging develop into main (fast-forward only)..."
 git merge --ff-only origin/develop || {
-  echo "Fast-forward failed. Rebasing develop onto main..."
+  echo ""
+  echo "Fast-forward not possible. Rebasing develop onto main first..."
   git checkout develop
   git rebase main
   git push origin develop --force-with-lease
@@ -198,12 +208,12 @@ git merge --ff-only origin/develop || {
 }
 
 git push origin main
-echo "✓ develop promoted to main"
+echo "✓ develop promoted to main via fast-forward"
 
 git checkout "$current_branch"
 """
 
-[tasks."git:rebase"]
+[tasks."vcs:rebase"]
 description = "Rebase current branch onto develop"
 run = """
 #!/usr/bin/env bash
@@ -211,6 +221,58 @@ set -euo pipefail
 git fetch origin
 git rebase origin/develop
 echo "✓ Rebased onto develop"
+"""
+
+[tasks."vcs:set-default-branch"]
+description = "Set develop as the default branch on GitHub (uses gh CLI, token in-memory only)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Verify gh is authenticated
+if ! gh auth status &>/dev/null; then
+  echo "ERROR: gh CLI is not authenticated. Run: gh auth login"
+  exit 1
+fi
+
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
+echo "Repository: $REPO"
+
+# Check if develop branch exists on remote
+if ! git ls-remote --heads origin develop | grep -q develop; then
+  echo "Creating develop branch from main..."
+  git checkout main
+  git pull origin main
+  git checkout -b develop
+  git push -u origin develop
+fi
+
+# Set default branch via GitHub API (token from gh, never stored to disk)
+gh api -X PATCH "repos/${REPO}" \
+  -f default_branch=develop \
+  --silent
+
+echo "✓ Default branch set to 'develop' for $REPO"
+
+# Add branch protection for develop (mirrors main protection)
+gh api -X PUT "repos/${REPO}/branches/develop/protection" \
+  --input - <<'EOF'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": []
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1
+  },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}
+EOF
+
+echo "✓ Branch protection applied to develop"
 """
 
 # ─── Build ───────────────────────────────────────────────────────────────────
@@ -232,6 +294,55 @@ deno compile --allow-all --no-check --target aarch64-unknown-linux-gnu --output 
 echo "✓ Binaries compiled to ./bin/"
 """
 
+# ─── NPM / Artifactory registry ─────────────────────────────────────────────
+
+[tasks."npm:set-registry"]
+description = "Set NPM registry to Artifactory (requires ARTIFACTORY_USER + ARTIFACTORY_KEY env vars)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+source ./scripts/resolve_secrets.sh 2>/dev/null || true
+
+RT_URL="" RT_USER="" RT_KEY=""
+
+# Try Conjur first
+if [ -n "${CONJUR_API_KEY:-}" ]; then
+  RT_URL=$(resolve_single_secret "artifactory/npm_url" conjur 2>/dev/null) || true
+  RT_USER=$(resolve_single_secret "artifactory/user" conjur 2>/dev/null) || true
+  RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur 2>/dev/null) || true
+fi
+
+RT_URL="${RT_URL:-${ARTIFACTORY_NPM_URL:-}}"
+RT_USER="${RT_USER:-${ARTIFACTORY_USER:-}}"
+RT_KEY="${RT_KEY:-${ARTIFACTORY_KEY:-}}"
+
+if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
+  echo "ERROR: Set ARTIFACTORY_NPM_URL, ARTIFACTORY_USER, and ARTIFACTORY_KEY env vars"
+  echo "  or configure Conjur (CONJUR_API_KEY, CONJUR_URL, CONJUR_SAFE)"
+  exit 1
+fi
+
+# Configure npm to use Artifactory
+npm config set registry "$RT_URL"
+
+# Set auth — Artifactory uses _auth = base64(user:key)
+AUTH=$(echo -n "${RT_USER}:${RT_KEY}" | base64)
+REGISTRY_HOST=$(echo "$RT_URL" | sed 's|https\\?://||')
+npm config set "//${REGISTRY_HOST}:_auth" "$AUTH"
+
+echo "✓ NPM registry set to $RT_URL"
+echo "  (credentials stored in ~/.npmrc, not in repo)"
+"""
+
+[tasks."npm:reset-registry"]
+description = "Reset NPM registry to default (npmjs.org)"
+run = """
+#!/usr/bin/env bash
+npm config set registry https://registry.npmjs.org/
+echo "✓ NPM registry reset to https://registry.npmjs.org/"
+"""
+
 # ─── Secrets & Transcrypt ───────────────────────────────────────────────────
 
 [tasks."secrets:init"]
@@ -244,7 +355,7 @@ transcrypt_bootstrap
 """
 
 [tasks."secrets:resolve"]
-description = "Resolve secrets using Conjur → Azure Key Vault → env vars/inputs chain"
+description = "Resolve secrets: Conjur (if CONJUR_API_KEY exists) → fallback to env vars/inputs"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -260,7 +371,7 @@ depends = ["secrets:init", "version:init", "version:set"]
 run = """
 #!/usr/bin/env bash
 echo ""
-echo "✓ Project initialised. Run 'mise run help' to see available tasks."
+echo "✓ Project initialised. Run 'mise tasks' to see available tasks."
 """
 
 [tasks.setup]
@@ -272,44 +383,27 @@ set -euo pipefail
 echo "Installing mise shell completions..."
 
 # Bash
-if [ -d /etc/bash_completion.d ]; then
-  mise completion bash > /etc/bash_completion.d/mise 2>/dev/null || \
-  mise completion bash > ~/.local/share/bash-completion/completions/mise 2>/dev/null || true
-  echo "  ✓ bash completions installed"
-elif [ -d ~/.local/share/bash-completion/completions ]; then
-  mkdir -p ~/.local/share/bash-completion/completions
-  mise completion bash > ~/.local/share/bash-completion/completions/mise
-  echo "  ✓ bash completions installed"
-else
-  echo "  ⚠ bash completion directory not found, skipping"
-fi
+mkdir -p ~/.local/share/bash-completion/completions
+mise completion bash > ~/.local/share/bash-completion/completions/mise 2>/dev/null && \
+  echo "  ✓ bash" || echo "  ⚠ bash (skipped)"
 
 # Zsh
-if [ -d /usr/local/share/zsh/site-functions ]; then
-  mise completion zsh > /usr/local/share/zsh/site-functions/_mise 2>/dev/null || true
-  echo "  ✓ zsh completions installed"
-elif [ -d ~/.zsh/completions ]; then
-  mise completion zsh > ~/.zsh/completions/_mise
-  echo "  ✓ zsh completions installed"
-else
-  mkdir -p ~/.zsh/completions
-  mise completion zsh > ~/.zsh/completions/_mise 2>/dev/null || true
-  echo "  ✓ zsh completions installed to ~/.zsh/completions"
-fi
+mkdir -p ~/.zsh/completions
+mise completion zsh > ~/.zsh/completions/_mise 2>/dev/null && \
+  echo "  ✓ zsh" || echo "  ⚠ zsh (skipped)"
 
 # Fish
 if command -v fish &>/dev/null; then
-  fish_comp_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
-  mkdir -p "$fish_comp_dir"
-  mise completion fish > "$fish_comp_dir/mise.fish"
-  echo "  ✓ fish completions installed"
+  fish_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
+  mkdir -p "$fish_dir"
+  mise completion fish > "$fish_dir/mise.fish" && \
+    echo "  ✓ fish" || echo "  ⚠ fish (skipped)"
 else
-  echo "  ⚠ fish not found, skipping fish completions"
+  echo "  ⚠ fish not installed, skipping"
 fi
 
 echo ""
-echo "Completions installed. Restart your shell or run 'source ~/.bashrc' to activate."
-echo "Use 'mise tasks' for auto-documented task list."
+echo "Restart your shell or 'source ~/.bashrc' to activate."
 """
 
 [tasks.help]
@@ -319,10 +413,9 @@ run = """
 echo ""
 echo "Available tasks (run with: mise run <task>):"
 echo "─────────────────────────────────────────────"
-mise tasks 2>/dev/null || echo "Run 'mise tasks' directly for task list"
+mise tasks 2>/dev/null || echo "Run 'mise tasks' for task list"
 echo ""
-echo "Tip: Use 'mise run <task> --help' for task-specific help."
-echo "     Use 'mise completion <shell>' for shell completions."
+echo "Tip: 'mise run <task>' to execute, 'mise completion <shell>' for completions"
 """
 
 # ─── CI helpers ──────────────────────────────────────────────────────────────
@@ -338,6 +431,10 @@ run = "deno check ./src/mod.ts"
 [tasks."ci:test"]
 description = "CI test run"
 run = "deno test -A"
+
+[tasks."ci:all"]
+description = "Run all CI checks (lint + check + test + build + run)"
+depends = ["lint", "check", "test", "build", "run"]
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
 

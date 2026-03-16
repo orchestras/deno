@@ -40,17 +40,13 @@
     }
   },
   "tasks": {
-    "test": "deno test -A ",
-    "publish": "deno task generate && deno run -A ./src/build_npm.ts 0.1.2 && cd npm && npm publish",
+    "test": "deno test -A",
     "build": "deno run --allow-all src/make_version.ts",
     "check": "deno check src/mod.ts",
-    "compile": "make build",
     "upgrade": "deno outdated --update --latest",
     "validate-hooks": "deno run -A npm:lefthook validate",
     "pre-commit": "deno run -A npm:lefthook run pre-commit",
-    "pre-push": "deno run -A npm:lefthook run pre-push",
-    "dev-install": "direnv allow .envrc",
-    "run": "make run"
+    "pre-push": "deno run -A npm:lefthook run pre-push"
   },
   "imports": {
     "@deno/dnt": "jsr:@deno/dnt@^0.41.2",

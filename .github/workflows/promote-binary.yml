@@ -1,26 +1,15 @@
-name: Promote Binary Artifact
+name: "Artifactory: Promote Binary"
+
+# Copies binary artifacts between Artifactory environments.
+# Promotion is always a COPY (not move) and must follow the path:
+#   dev → uat → prod  (no skipping stages)
+#
+# This workflow does NOT fetch from GitHub — it operates entirely
+# within Artifactory, copying artifacts between repositories.
 
 on:
   workflow_dispatch:
     inputs:
-      secret_provider:
-        description: "Secret provider"
-        required: true
-        type: choice
-        options:
-          - conjur
-          - azure
-          - inputs
-        default: conjur
-      artifactory_url:
-        description: "Artifactory URL (if using inputs)"
-        required: false
-      artifactory_user:
-        description: "Artifactory user (if using inputs)"
-        required: false
-      artifactory_key:
-        description: "Artifactory API key (if using inputs)"
-        required: false
       promotion:
         description: "Promotion stage"
         required: true
@@ -28,19 +17,24 @@ on:
         options:
           - dev-to-uat
           - uat-to-prod
+      artifact_path:
+        description: "Artifact path within the repository (e.g. orchestras/v0.1.5/)"
+        required: true
       source_repo:
-        description: "Source Artifactory repo (auto-set from promotion stage)"
+        description: "Override source repo (default auto-set from promotion stage)"
         required: false
       target_repo:
-        description: "Target Artifactory repo (auto-set from promotion stage)"
+        description: "Override target repo (default auto-set from promotion stage)"
         required: false
-      artifact_path:
-        description: "Artifact path within the repository"
-        required: true
-        default: "orchestras/"
-      artifact_version:
-        description: "Artifact version to promote"
-        required: true
+      artifactory_url:
+        description: "Artifactory base URL (fallback if not in Conjur)"
+        required: false
+      artifactory_user:
+        description: "Artifactory user (fallback if not in Conjur)"
+        required: false
+      artifactory_key:
+        description: "Artifactory API key (fallback if not in Conjur)"
+        required: false
 
 permissions:
   contents: read
@@ -52,64 +46,50 @@ jobs:
       CONJUR_API_KEY: ${{ secrets.CONJUR_API_KEY }}
       CONJUR_URL: ${{ vars.CONJUR_URL }}
       CONJUR_SAFE: ${{ vars.CONJUR_SAFE }}
-      AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME }}
-      SECRET_PROVIDER: ${{ inputs.secret_provider }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate promotion path
+      - name: Determine source and target repos
         id: repos
         run: |
           case "${{ inputs.promotion }}" in
             dev-to-uat)
               SRC="${{ inputs.source_repo }}"
               TGT="${{ inputs.target_repo }}"
-              SRC="${SRC:-deno-binaries-dev}"
-              TGT="${TGT:-deno-binaries-uat}"
+              echo "source=${SRC:-deno-binaries-dev}" >> "$GITHUB_OUTPUT"
+              echo "target=${TGT:-deno-binaries-uat}" >> "$GITHUB_OUTPUT"
               ;;
             uat-to-prod)
               SRC="${{ inputs.source_repo }}"
               TGT="${{ inputs.target_repo }}"
-              SRC="${SRC:-deno-binaries-uat}"
-              TGT="${TGT:-deno-binaries-prod}"
-              ;;
-            *)
-              echo "::error::Invalid promotion: ${{ inputs.promotion }}. Must be dev-to-uat or uat-to-prod."
-              exit 1
+              echo "source=${SRC:-deno-binaries-uat}" >> "$GITHUB_OUTPUT"
+              echo "target=${TGT:-deno-binaries-prod}" >> "$GITHUB_OUTPUT"
               ;;
           esac
-          echo "source=$SRC" >> "$GITHUB_OUTPUT"
-          echo "target=$TGT" >> "$GITHUB_OUTPUT"
-          echo "Promoting: $SRC → $TGT"
+          echo "Promotion: ${{ inputs.promotion }}"
 
-      - name: Resolve Artifactory Credentials
+      - name: Resolve Artifactory credentials
         id: creds
         run: |
           source ./scripts/resolve_secrets.sh
 
           RT_URL="" RT_USER="" RT_KEY=""
 
-          case "$SECRET_PROVIDER" in
-            conjur)
-              RT_URL=$(resolve_single_secret "artifactory/url" conjur) || true
-              RT_USER=$(resolve_single_secret "artifactory/user" conjur) || true
-              RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur) || true
-              ;;
-            azure)
-              RT_URL=$(resolve_single_secret "artifactory-url" azure) || true
-              RT_USER=$(resolve_single_secret "artifactory-user" azure) || true
-              RT_KEY=$(resolve_single_secret "artifactory-api-key" azure) || true
-              ;;
-          esac
+          if [ -n "${CONJUR_API_KEY:-}" ]; then
+            echo "Resolving credentials from Conjur..."
+            RT_URL=$(resolve_single_secret "artifactory/url" conjur 2>/dev/null) || true
+            RT_USER=$(resolve_single_secret "artifactory/user" conjur 2>/dev/null) || true
+            RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur 2>/dev/null) || true
+          fi
 
           RT_URL="${RT_URL:-${{ inputs.artifactory_url }}}"
           RT_USER="${RT_USER:-${{ inputs.artifactory_user }}}"
           RT_KEY="${RT_KEY:-${{ inputs.artifactory_key }}}"
 
           if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
-            echo "::error::Failed to resolve Artifactory credentials"
+            echo "::error::Could not resolve Artifactory credentials."
             exit 1
           fi
 
@@ -122,7 +102,7 @@ jobs:
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
 
-      - name: Copy Artifact (promote)
+      - name: Copy artifacts between repos (promote)
         env:
           RT_URL: ${{ steps.creds.outputs.rt_url }}
           RT_USER: ${{ steps.creds.outputs.rt_user }}
@@ -136,13 +116,14 @@ jobs:
 
           SRC="${{ steps.repos.outputs.source }}"
           TGT="${{ steps.repos.outputs.target }}"
-          ARTIFACT="${{ inputs.artifact_path }}${{ inputs.artifact_version }}/"
+          ARTIFACT="${{ inputs.artifact_path }}"
 
-          # Copy (not move) from source to target
+          echo "Copying: ${SRC}/${ARTIFACT} → ${TGT}/${ARTIFACT}"
+
           jf rt copy \
             "${SRC}/${ARTIFACT}*" \
             "${TGT}/${ARTIFACT}" \
             --server-id=rt-server \
             --flat=false
 
-          echo "✓ Copied ${SRC}/${ARTIFACT} → ${TGT}/${ARTIFACT}"
+          echo "✓ Promoted ${SRC}/${ARTIFACT} → ${TGT}/${ARTIFACT}"

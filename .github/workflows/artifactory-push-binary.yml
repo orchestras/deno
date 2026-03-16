@@ -1,38 +1,35 @@
-name: Push Binary to Artifactory
+name: "Artifactory: Push Release Binaries"
+
+# Downloads binary artifacts from a GitHub Release and pushes them
+# to the Artifactory DEV binary repository. This is the entry point
+# for artifacts into the Artifactory promotion pipeline.
+#
+# Promotion path: GitHub Release → RT dev → RT uat → RT prod
+# (each promotion is a separate workflow dispatch)
 
 on:
   workflow_dispatch:
     inputs:
-      secret_provider:
-        description: "Secret provider"
+      release_tag:
+        description: "GitHub release tag to fetch artifacts from (e.g. v0.1.5)"
         required: true
-        type: choice
-        options:
-          - conjur
-          - azure
-          - inputs
-        default: conjur
-      artifactory_url:
-        description: "Artifactory URL (if using inputs provider)"
-        required: false
-      artifactory_user:
-        description: "Artifactory user (if using inputs provider)"
-        required: false
-      artifactory_key:
-        description: "Artifactory API key (if using inputs provider)"
-        required: false
       artifactory_repo:
-        description: "Artifactory repository name"
+        description: "Artifactory DEV repository name"
         required: true
         default: "deno-binaries-dev"
-      binary_path:
-        description: "Path to binary artifact(s)"
-        required: true
-        default: "bin/"
       artifact_folder:
-        description: "Target folder in Artifactory"
+        description: "Target folder path in the repository"
         required: true
         default: "orchestras/"
+      artifactory_url:
+        description: "Artifactory base URL (fallback if not in Conjur)"
+        required: false
+      artifactory_user:
+        description: "Artifactory user (fallback if not in Conjur)"
+        required: false
+      artifactory_key:
+        description: "Artifactory API key (fallback if not in Conjur)"
+        required: false
 
 permissions:
   contents: read
@@ -44,8 +41,6 @@ jobs:
       CONJUR_API_KEY: ${{ secrets.CONJUR_API_KEY }}
       CONJUR_URL: ${{ vars.CONJUR_URL }}
       CONJUR_SAFE: ${{ vars.CONJUR_SAFE }}
-      AZURE_KEY_VAULT_NAME: ${{ vars.AZURE_KEY_VAULT_NAME }}
-      SECRET_PROVIDER: ${{ inputs.secret_provider }}
 
     steps:
       - name: Checkout
@@ -54,37 +49,39 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
 
-      - name: Resolve Artifactory Credentials
+      - name: Download release artifacts from GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ./release-artifacts
+          gh release download "${{ inputs.release_tag }}" \
+            --dir ./release-artifacts \
+            --pattern '*'
+          echo "Downloaded artifacts:"
+          ls -la ./release-artifacts/
+
+      - name: Resolve Artifactory credentials
         id: creds
         run: |
           source ./scripts/resolve_secrets.sh
 
-          RT_URL=""
-          RT_USER=""
-          RT_KEY=""
+          RT_URL="" RT_USER="" RT_KEY=""
 
-          case "$SECRET_PROVIDER" in
-            conjur)
-              echo "Resolving from Conjur..."
-              RT_URL=$(resolve_single_secret "artifactory/url" conjur) || true
-              RT_USER=$(resolve_single_secret "artifactory/user" conjur) || true
-              RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur) || true
-              ;;
-            azure)
-              echo "Resolving from Azure Key Vault..."
-              RT_URL=$(resolve_single_secret "artifactory-url" azure) || true
-              RT_USER=$(resolve_single_secret "artifactory-user" azure) || true
-              RT_KEY=$(resolve_single_secret "artifactory-api-key" azure) || true
-              ;;
-          esac
+          # Try Conjur first if CONJUR_API_KEY exists
+          if [ -n "${CONJUR_API_KEY:-}" ]; then
+            echo "Resolving credentials from Conjur..."
+            RT_URL=$(resolve_single_secret "artifactory/url" conjur 2>/dev/null) || true
+            RT_USER=$(resolve_single_secret "artifactory/user" conjur 2>/dev/null) || true
+            RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur 2>/dev/null) || true
+          fi
 
-          # Fallback to inputs/env vars
+          # Fallback to inputs
           RT_URL="${RT_URL:-${{ inputs.artifactory_url }}}"
           RT_USER="${RT_USER:-${{ inputs.artifactory_user }}}"
           RT_KEY="${RT_KEY:-${{ inputs.artifactory_key }}}"
 
           if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
-            echo "::error::Failed to resolve Artifactory credentials from provider '$SECRET_PROVIDER' and inputs"
+            echo "::error::Could not resolve Artifactory credentials. Provide them via Conjur (CONJUR_API_KEY secret + CONJUR_URL/CONJUR_SAFE vars) or as workflow inputs."
             exit 1
           fi
 
@@ -97,7 +94,7 @@ jobs:
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
 
-      - name: Configure & Push
+      - name: Push artifacts to Artifactory DEV
         env:
           RT_URL: ${{ steps.creds.outputs.rt_url }}
           RT_USER: ${{ steps.creds.outputs.rt_user }}
@@ -109,10 +106,12 @@ jobs:
             --apikey="$RT_KEY" \
             --interactive=false
 
-          jf rt upload \
-            "${{ inputs.binary_path }}" \
-            "${{ inputs.artifactory_repo }}/${{ inputs.artifact_folder }}" \
-            --server-id=rt-server \
-            --flat=false
+          DEST="${{ inputs.artifactory_repo }}/${{ inputs.artifact_folder }}${{ inputs.release_tag }}/"
 
-          echo "✓ Binary pushed to ${{ inputs.artifactory_repo }}/${{ inputs.artifact_folder }}"
+          jf rt upload \
+            "./release-artifacts/*" \
+            "$DEST" \
+            --server-id=rt-server \
+            --flat=true
+
+          echo "✓ Pushed ${{ inputs.release_tag }} artifacts to $DEST"

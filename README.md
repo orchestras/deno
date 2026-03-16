@@ -10,28 +10,22 @@
 
 ### What is this?
 
-A re-usable repository template for TypeScript using the **Deno** runtime, designed
-for edge-compiled applications. It compiles single-purpose binary CLIs for multiple
-platforms, distributable via GitHub Releases and Artifactory.
+A re-usable repository template for TypeScript using the **Deno** runtime,
+designed for edge-compiled applications. It compiles single-purpose binary CLIs
+for multiple platforms, distributable via GitHub Releases and JFrog Artifactory.
 
 ### Key Features
 
-| Feature | Description |
-|---|---|
-| **mise en place** | All tools and tasks managed via `mise.toml` — no global installs needed |
-| **Version management** | `bump:build`, `bump:patch`, `bump:minor`, `bump:major` — tag pushed separately |
-| **Linear rebase model** | `develop` → `main` promotion with rebase-only merges |
-| **Transcrypt** | Auto-bootstrapped encrypted secrets with GH repo secret storage |
-| **Secret resolution** | Conjur → Azure Key Vault → env vars/inputs — flexible fallback chain |
-| **Artifactory** | Push and promote binaries and Docker images (dev → uat → prod) |
-| **Cross-platform builds** | Darwin, Linux, Windows (amd64/arm64) |
-| **LeftHook** | Pre-commit and pre-push hooks using mise tasks |
-
-### Supported Platforms
-
-- **darwin**: amd64, arm64
-- **linux**: amd64, arm64
-- **windows**: amd64
+| Feature                   | Description                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| **mise en place**         | All tools (Deno, Node) and tasks managed via `mise.toml`                     |
+| **Version management**    | `bump:patch`, `bump:minor`, `bump:major`, `bump:build` — tagging is separate |
+| **Linear rebase model**   | `feature/*` → `develop` → `main` — rebase-only, no merge commits             |
+| **Transcrypt**            | Auto-bootstrapped encrypted secrets with GH repo secret storage              |
+| **Secret resolution**     | Conjur → env vars/inputs — flexible fallback chain                           |
+| **Artifactory**           | Push release artifacts to dev, promote (copy) dev → uat → prod               |
+| **Cross-platform builds** | Darwin, Linux, Windows (amd64/arm64)                                         |
+| **LeftHook**              | Pre-commit and pre-push hooks via mise tasks                                 |
 
 ---
 
@@ -50,165 +44,208 @@ source ~/.bashrc
 ### Setup
 
 ```bash
-# Install tools (Deno) and initialise the project
-mise install
-mise run init
-
-# Optional: install shell completions
-mise run setup
+mise install                # install tools (Deno 2.0.2, Node 22)
+mise run init               # bootstrap secrets, create initial tag, set version
+mise run setup              # install shell completions (bash/zsh/fish)
 ```
 
 ### Common Tasks
 
 ```bash
-mise tasks              # list all tasks with descriptions
-mise run run            # run the application
-mise run lint           # lint source code
-mise run check          # type-check
-mise run test           # run tests
-mise run build          # regenerate version.ts
-mise run compile        # compile cross-platform binaries
+mise tasks                  # list all tasks with descriptions
+mise run run                # run the application
+mise run lint               # lint source code
+mise run check              # type-check
+mise run test               # run tests
+mise run fmt                # format source code
+mise run build              # regenerate version.ts
+mise run compile            # compile cross-platform binaries
+mise run ci:all             # run full CI pipeline locally
 ```
 
 ### Makefile Compatibility
 
-The `Makefile` is a thin auto-delegating wrapper. All targets forward to mise:
+The `Makefile` is a thin auto-delegating wrapper that translates dashes to
+colons:
 
 ```bash
-make help               # same as `mise tasks`
-make run                # same as `mise run run`
-make bump-patch         # same as `mise run bump:patch`
+make help                   # = mise tasks
+make run                    # = mise run run
+make bump-patch             # = mise run bump:patch
+make vcs-promote            # = mise run vcs:promote
 ```
 
 ---
 
 ## Version Management
 
-Version is tracked in `deno.json` and auto-generated into `src/version.ts`.
-The old `.semver.*` flat-file caching has been removed.
+Version is tracked only in `deno.json` → auto-generated into `src/version.ts`.
 
 ### Bump Workflow
 
-Bump commands update `deno.json` and regenerate `version.ts`, but **do not**
-create or push git tags. This separates version bumping from tag pushing so
-tags are only pushed after all commits are ready.
+Bump commands update the version but **do not** create or push git tags. This
+ensures tags only appear after all commits are pushed and CI passes.
 
 ```bash
-mise run bump:patch     # 0.1.0 → 0.1.1
-mise run bump:minor     # 0.1.0 → 0.2.0
-mise run bump:major     # 0.1.0 → 1.0.0
-mise run bump:build     # 0.1.0 → 0.1.0+12345
+mise run bump:patch         # 0.1.0 → 0.1.1
+mise run bump:minor         # 0.1.0 → 0.2.0
+mise run bump:major         # 0.1.0 → 1.0.0
+mise run bump:build         # 0.1.0 → 0.1.0+12345
 
-# After committing and pushing all changes:
-mise run tag:create     # creates git tag from deno.json version
-mise run tag:push       # pushes tags to origin (triggers release)
+# After pushing all commits:
+mise run tag:create         # creates git tag from deno.json version
+mise run tag:push           # pushes tags to origin → triggers release workflow
 ```
 
 ### CI Auto-Versioning
 
-The `bump.yml` workflow auto-bumps on push to `main` using commit message
-patterns (`#major`, `#minor`, `#patch`).
+`bump.yml` auto-bumps on push to `main` using commit message patterns (`#major`,
+`#minor`, `#patch`).
 
 ---
 
-## Branch Model (Linear Rebase)
+## Branch Model — VCS Promotion
 
-This repository uses a **two-branch linear rebase model**:
+This repository uses a **two-branch linear rebase model**. VCS promotion is
+about moving code between branches — it is **not** the same as Artifactory build
+promotion.
 
 ```
-feature/* ──→ develop ──→ main
+feature/MCKB-2000 ──(PR rebase)──→ develop ──(linear rebase)──→ main
 ```
 
-| Branch | Purpose | Protection |
-|---|---|---|
-| `main` | Production-ready code. Tags and releases come from here. | Require PR, require CI, no force push |
-| `develop` | Integration branch. All feature PRs target develop. | Require PR, require CI, no force push |
+| Branch    | Purpose                                             | Protection                            |
+| --------- | --------------------------------------------------- | ------------------------------------- |
+| `develop` | **Default branch.** Integration target for all PRs. | Require PR, require CI                |
+| `main`    | Production. Tags and releases originate here.       | Require PR, require CI, no force push |
 
 ### Workflow
 
-1. Create a feature branch from `develop`
-2. Open a PR targeting `develop`
-3. After CI passes, merge (squash or rebase)
-4. When ready to release, promote develop → main:
+1. Create `feature/MCKB-2000` from `develop`
+2. Open a PR targeting `develop` (rebase merge)
+3. When ready to release, promote develop → main:
 
 ```bash
-mise run git:promote    # fast-forward main to develop (rebases if needed)
+mise run vcs:promote            # fast-forward main to develop (rebases if needed)
+mise run vcs:set-default-branch # set develop as default + apply branch protection (gh CLI)
+mise run vcs:rebase             # rebase current branch onto develop
 ```
 
-### Rebase current branch onto develop
+The `vcs:set-default-branch` task uses `gh` CLI (token stays in memory, never
+written to disk). It creates `develop` if missing, sets it as default, and
+applies branch protection matching `main`.
+
+---
+
+## Artifactory — Build Promotion
+
+Build promotion is separate from VCS promotion. It moves **artifacts** through
+Artifactory environments:
+
+```
+GitHub Release → Artifactory DEV → Artifactory UAT → Artifactory PROD
+```
+
+### Push (GitHub Release → Artifactory DEV)
+
+Manual dispatch workflows download artifacts from a GitHub Release and push them
+to the Artifactory **DEV** repository:
+
+| Workflow                      | What it pushes                                  |
+| ----------------------------- | ----------------------------------------------- |
+| `artifactory-push-binary.yml` | Release binaries/tarballs → `deno-binaries-dev` |
+| `artifactory-push-image.yml`  | Docker image → `docker-dev-local`               |
+
+### Promote (within Artifactory)
+
+Promotion **copies** artifacts between Artifactory repositories. You cannot skip
+environments — promotion must follow the path `dev → uat → prod`:
+
+| Workflow             | What it does                                                    |
+| -------------------- | --------------------------------------------------------------- |
+| `promote-binary.yml` | Copy binaries: `deno-binaries-dev` → `uat` or `uat` → `prod`    |
+| `promote-image.yml`  | Copy Docker image: `docker-dev-local` → `uat` or `uat` → `prod` |
+
+### Secret Resolution
+
+All Artifactory workflows resolve credentials in this order:
+
+1. **Conjur** — if `CONJUR_API_KEY` repo secret + `CONJUR_URL`/`CONJUR_SAFE`
+   vars exist
+2. **Inputs** — workflow dispatch inputs (`artifactory_url`, `artifactory_user`,
+   `artifactory_key`)
+
+If both fail, the workflow errors out.
+
+---
+
+## NPM Registry
+
+To point NPM at your Artifactory NPM repository:
 
 ```bash
-mise run git:rebase
+export ARTIFACTORY_NPM_URL="https://your-instance.jfrog.io/artifactory/api/npm/npm-local/"
+export ARTIFACTORY_USER="your-user"
+export ARTIFACTORY_KEY="your-api-key"
+mise run npm:set-registry   # configures ~/.npmrc
+mise run npm:reset-registry # revert to npmjs.org
 ```
+
+If Conjur is configured, credentials are resolved automatically.
 
 ---
 
 ## Secrets Management
 
-### Transcrypt (Encrypted Files)
-
-Transcrypt encrypts files listed in `.gitattributes` (e.g. `.envcrypt`).
-The bootstrap process is fully automatic:
+### Transcrypt
 
 ```bash
-mise run secrets:init
+mise run secrets:init       # auto-bootstrap or configure from repo secret
 ```
 
-- If a `TRANSCRYPT_PASSWORD` repo secret exists → configures transcrypt from it
-- If no secret exists → generates a new password, bootstraps, and stores it as a repo secret
-- If an encrypted file exists without a matching secret → cleans up stale file
+### Secret Resolution
 
-### Secret Resolution Chain
-
-All Artifactory and deployment workflows use a unified resolution chain:
-
-1. **Conjur** — if `CONJUR_API_KEY` (secret) + `CONJUR_URL`, `CONJUR_SAFE` (vars) exist
-2. **Azure Key Vault** — if `AZURE_KEY_VAULT_NAME` (var) exists
-3. **Inputs / env vars** — manual fallback
-
-Each workflow has a `secret_provider` input to override the auto-detection.
+```bash
+source ./scripts/resolve_secrets.sh
+resolve_single_secret "artifactory/url"   # auto: Conjur → env vars
+resolve_single_secret "my/secret" conjur  # force Conjur
+```
 
 ---
 
 ## Workflows
 
-| Workflow | Trigger | Description |
-|---|---|---|
-| `ci.yml` | PR to develop/main, push to develop | Lint, check, test, build, run |
-| `bump.yml` | Push to main | Auto version bump and tag |
-| `release.yml` | Tag push (v*) | Cross-platform binary build + GitHub Release |
-| `artifactory-push-binary.yml` | Manual dispatch | Push binary artifacts to Artifactory |
-| `artifactory-push-image.yml` | Manual dispatch | Build and push Docker image to Artifactory |
-| `promote-binary.yml` | Manual dispatch | Copy binary: dev → uat or uat → prod |
-| `promote-image.yml` | Manual dispatch | Copy Docker image: dev → uat or uat → prod |
-
-### Promotion Rules
-
-- Artifacts always flow `dev → uat → prod` (copy, not move)
-- Direct `dev → prod` promotion is **not allowed**
-- Promotion uses the same secret resolution chain
+| Workflow                      | Trigger                 | Description                                           |
+| ----------------------------- | ----------------------- | ----------------------------------------------------- |
+| `ci.yml`                      | PR/push to develop/main | Lint, check, test, build, run                         |
+| `bump.yml`                    | Push to main            | Auto version bump and tag                             |
+| `release.yml`                 | Tag push (v*)           | Cross-platform binary build + GitHub Release          |
+| `artifactory-push-binary.yml` | Manual                  | Download GH release → push to Artifactory DEV         |
+| `artifactory-push-image.yml`  | Manual                  | Build + push Docker image to Artifactory DEV          |
+| `promote-binary.yml`          | Manual                  | Copy binaries: dev→uat or uat→prod in Artifactory     |
+| `promote-image.yml`           | Manual                  | Copy Docker image: dev→uat or uat→prod in Artifactory |
 
 ---
 
 ## Project Structure
 
 ```
-├── mise.toml               # Tool versions + all tasks
-├── Makefile                # Auto-delegating wrapper (optional)
-├── deno.json               # Deno config, version, dependencies
+├── mise.toml                   # Tool versions (Deno, Node) + all tasks
+├── Makefile                    # Auto-delegating wrapper → mise tasks
+├── deno.json                   # Deno config, version, dependencies
 ├── src/
-│   ├── mod.ts              # Main entrypoint
-│   ├── version.ts          # Auto-generated version constant
-│   ├── make_version.ts     # Version file generator
-│   └── tests/              # Test files
+│   ├── mod.ts                  # Main entrypoint
+│   ├── version.ts              # Auto-generated version constant
+│   ├── make_version.ts         # Version file generator
+│   └── tests/                  # Test files
 ├── scripts/
-│   ├── resolve_secrets.sh  # Conjur/Azure/input secret resolution
-│   ├── transcrypt_bootstrap.sh  # Auto-bootstrap transcrypt
-│   ├── semver.sh           # Semver utility
-│   └── colors.sh           # Terminal colors
-├── .github/workflows/      # CI/CD workflows
-├── lefthook.yml            # Git hooks (uses mise tasks)
-└── .envrc                  # direnv → mise activation
+│   ├── resolve_secrets.sh      # Conjur → env/input secret resolution
+│   ├── transcrypt_bootstrap.sh # Auto-bootstrap transcrypt
+│   ├── semver.sh               # Semver utility
+│   └── colors.sh               # Terminal colors
+├── .github/workflows/          # CI/CD and Artifactory workflows
+├── lefthook.yml                # Git hooks → mise tasks
+└── .envrc                      # direnv → mise activation
 ```
 
 ---
