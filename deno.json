@@ -1,10 +1,12 @@
 {
-  "version": "v0.1.5",
+  "version": "v0.1.4",
   "name": "@softdist/orchestras",
   "license": "MIT",
   "exports": "./src/mod.ts",
   "test": {
-    "include": ["src/tests/"]
+    "include": [
+      "src/tests/"
+    ]
   },
   "nodeModulesDir": "auto",
   "compilerOptions": {
