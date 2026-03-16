@@ -1,7 +1,7 @@
-# mise.toml — project tool versions and tasks
-# Docs: https://mise.jdx.dev/
-# Run `mise tasks` for a full list of available tasks with descriptions.
+# mise.toml — all tools and tasks for the Deno edge template
+# Run `mise tasks` for a full list with descriptions.
 # Run `mise run <task>` to execute a task.
+# Docs: https://mise.jdx.dev/
 
 [tools]
 deno = "2.0.2"
@@ -36,170 +36,252 @@ run = "deno fmt --check"
 description = "Run the test suite"
 run = "deno test -A"
 
-# ─── Version management ─────────────────────────────────────────────────────
+[tasks.build]
+description = "Regenerate src/version.ts from deno.json"
+run = "deno run --allow-all src/make_version.ts"
+
+[tasks.compile]
+description = "Compile cross-platform binaries to ./bin/"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p bin
+deno compile --allow-all --no-check --target aarch64-apple-darwin --output ./bin/aarch64-apple-darwin/mod ./src/mod.ts
+deno compile --allow-all --no-check --target x86_64-apple-darwin --output ./bin/x86_64-apple-darwin/mod ./src/mod.ts
+deno compile --allow-all --no-check --target x86_64-unknown-linux-gnu --output ./bin/x86_64-unknown-linux-gnu/mod ./src/mod.ts
+deno compile --allow-all --no-check --target aarch64-unknown-linux-gnu --output ./bin/aarch64-unknown-linux-gnu/mod ./src/mod.ts
+echo "✓ Binaries compiled to ./bin/"
+"""
+
+# ─── Version ─────────────────────────────────────────────────────────────────
+# Version is derived from git remote tags — no .semver.* caches.
 
 [tasks.version]
 description = "Show current version from deno.json"
 run = """
 #!/usr/bin/env bash
-version=$(jq -r '.version' deno.json)
-echo "Current version: $version"
+echo "$(jq -r '.version' deno.json)"
 """
 
-[tasks."version:set"]
-description = "Sync version from latest git tag into deno.json and regenerate version.ts"
+[tasks."version:sync"]
+description = "Fetch remote tags and sync deno.json + version.ts to the latest"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-tag=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
+echo "Fetching tags from origin..."
+git fetch --tags origin
+tag=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v '+' | head -n 1)
 if [ -z "$tag" ]; then
-  echo "No version tags found — initialising at v0.1.0"
+  echo "No semver tags found — defaulting to v0.1.0"
   tag="v0.1.0"
 fi
 tmp=$(mktemp)
 jq --arg v "$tag" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
 deno run --allow-all src/make_version.ts
-echo "Version set to $tag"
+echo "✓ Version synced to $tag"
 """
 
 [tasks."version:init"]
-description = "Create initial v0.1.0 tag if no version tags exist"
+description = "Create initial v0.1.0 tag if no version tags exist on remote"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-existing=$(git tag -l 'v*' --sort=-v:refname | head -n 1)
-if [ -n "$existing" ]; then
-  echo "Tags already exist (latest: $existing). Skipping init."
+git fetch --tags origin
+remote_tags=$(git ls-remote --tags origin 'refs/tags/v*' 2>/dev/null | wc -l)
+if [ "$remote_tags" -gt 0 ]; then
+  latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v '+' | head -n 1)
+  echo "Tags exist on remote (latest: $latest). Skipping init."
   exit 0
 fi
 git tag -a v0.1.0 -m "v0.1.0 — initial version"
-echo "Created initial tag v0.1.0"
+git push origin v0.1.0
+echo "✓ Created and pushed initial tag v0.1.0"
 """
 
-# ─── Bump commands ──────────────────────────────────────────────────────────
-# These update deno.json + version.ts but do NOT create or push git tags.
-# Use `mise run tag:create` + `mise run tag:push` separately after all
-# commits are pushed.
-
-[tasks."bump:build"]
-description = "Bump build metadata (random build number)"
-run = """
-#!/usr/bin/env bash
-set -euo pipefail
-
-current=$(jq -r '.version' deno.json | sed 's/^v//')
-base=$(echo "$current" | cut -d'+' -f1)
-build_num=$(shuf -i 10000-99999 -n 1)
-new_version="v${base}+${build_num}"
-
-tmp=$(mktemp)
-jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
-deno run --allow-all src/make_version.ts
-
-echo "Bumped to $new_version"
-"""
+# ─── Bump ────────────────────────────────────────────────────────────────────
+# All bump tasks fetch the latest version tag from git remote, compute the
+# next version, update deno.json + version.ts, create the tag, but do NOT
+# push. Use `mise run tag:push` to push after all commits are ready.
 
 [tasks."bump:patch"]
-description = "Bump patch version (e.g. 0.1.0 → 0.1.1)"
+description = "Bump patch version from latest remote tag (e.g. 0.1.5 → 0.1.6)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-
-current=$(jq -r '.version' deno.json | sed 's/^v//')
-base=$(echo "$current" | cut -d'+' -f1 | cut -d'-' -f1)
-IFS='.' read -r major minor patch <<< "$base"
+git fetch --tags origin
+latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v '+' | head -n 1)
+[ -z "$latest" ] && latest="v0.0.0"
+ver=$(echo "$latest" | sed 's/^v//')
+IFS='.' read -r major minor patch <<< "$ver"
 patch=$((patch + 1))
-new_version="v${major}.${minor}.${patch}"
-
+new="v${major}.${minor}.${patch}"
 tmp=$(mktemp)
-jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+jq --arg v "$new" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
 deno run --allow-all src/make_version.ts
-
-echo "Bumped to $new_version"
+git tag -a "$new" -m "$new"
+echo "✓ Bumped $latest → $new (tag created, not pushed)"
 """
 
 [tasks."bump:minor"]
-description = "Bump minor version (e.g. 0.1.0 → 0.2.0)"
+description = "Bump minor version from latest remote tag (e.g. 0.1.5 → 0.2.0)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-
-current=$(jq -r '.version' deno.json | sed 's/^v//')
-base=$(echo "$current" | cut -d'+' -f1 | cut -d'-' -f1)
-IFS='.' read -r major minor patch <<< "$base"
+git fetch --tags origin
+latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v '+' | head -n 1)
+[ -z "$latest" ] && latest="v0.0.0"
+ver=$(echo "$latest" | sed 's/^v//')
+IFS='.' read -r major minor patch <<< "$ver"
 minor=$((minor + 1))
-new_version="v${major}.${minor}.0"
-
+new="v${major}.${minor}.0"
 tmp=$(mktemp)
-jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+jq --arg v "$new" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
 deno run --allow-all src/make_version.ts
-
-echo "Bumped to $new_version"
+git tag -a "$new" -m "$new"
+echo "✓ Bumped $latest → $new (tag created, not pushed)"
 """
 
 [tasks."bump:major"]
-description = "Bump major version (e.g. 0.1.0 → 1.0.0)"
+description = "Bump major version from latest remote tag (e.g. 0.1.5 → 1.0.0)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-
-current=$(jq -r '.version' deno.json | sed 's/^v//')
-base=$(echo "$current" | cut -d'+' -f1 | cut -d'-' -f1)
-IFS='.' read -r major minor patch <<< "$base"
+git fetch --tags origin
+latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v '+' | head -n 1)
+[ -z "$latest" ] && latest="v0.0.0"
+ver=$(echo "$latest" | sed 's/^v//')
+IFS='.' read -r major minor patch <<< "$ver"
 major=$((major + 1))
-new_version="v${major}.0.0"
-
+new="v${major}.0.0"
 tmp=$(mktemp)
-jq --arg v "$new_version" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+jq --arg v "$new" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
 deno run --allow-all src/make_version.ts
-
-echo "Bumped to $new_version"
+git tag -a "$new" -m "$new"
+echo "✓ Bumped $latest → $new (tag created, not pushed)"
 """
 
-# ─── Tagging (always done after all commits are pushed) ─────────────────────
+[tasks."bump:build"]
+description = "Bump build metadata from latest remote tag (e.g. 0.1.5 → 0.1.5+12345)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+git fetch --tags origin
+latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v '+' | head -n 1)
+[ -z "$latest" ] && latest="v0.0.0"
+ver=$(echo "$latest" | sed 's/^v//')
+build_num=$(shuf -i 10000-99999 -n 1)
+new="v${ver}+${build_num}"
+tmp=$(mktemp)
+jq --arg v "$new" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
+deno run --allow-all src/make_version.ts
+git tag -a "$new" -m "$new"
+echo "✓ Bumped $latest → $new (tag created, not pushed)"
+"""
+
+# ─── Tags ────────────────────────────────────────────────────────────────────
+
+[tasks."tag:list"]
+description = "List local version tags"
+run = "git tag -l 'v*' --sort=-v:refname"
+
+[tasks."tag:remote"]
+description = "Show version tags on the remote"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Remote tags:"
+git ls-remote --tags origin 'refs/tags/v*' 2>/dev/null | \
+  sed 's|.*refs/tags/||' | grep -v '\\^{}' | sort -rV
+"""
+
+[tasks."tag:fetch"]
+description = "Fetch all tags from remote into local"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+git fetch --tags origin
+echo "✓ Tags fetched from origin"
+git tag -l 'v*' --sort=-v:refname
+"""
+
+[tasks."tag:push"]
+description = "Push all local tags to origin"
+run = "git push origin --tags"
 
 [tasks."tag:create"]
-description = "Create a git tag from the current deno.json version"
+description = "Create a git tag from the current deno.json version (does not push)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 version=$(jq -r '.version' deno.json)
-echo "Creating tag: $version"
+if git tag -l | grep -qx "$version"; then
+  echo "Tag $version already exists locally."
+  exit 0
+fi
 git tag -a "$version" -m "$version"
-echo "Tag $version created locally. Run 'mise run tag:push' to push."
+echo "✓ Tag $version created. Run 'mise run tag:push' to push."
 """
 
-[tasks."tag:push"]
-description = "Push all tags to origin"
-run = "git push origin --tags"
+[tasks."tag:clean"]
+description = "Delete all local tags only if no tags exist on the remote"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Fetching remote tags..."
+git fetch --tags origin
 
-[tasks."tag:list"]
-description = "List all version tags"
-run = "git tag -l 'v*' --sort=-v:refname"
+remote_count=$(git ls-remote --tags origin 'refs/tags/v*' 2>/dev/null | grep -v '\\^{}' | wc -l)
+local_tags=$(git tag -l 'v*')
+local_count=$(echo "$local_tags" | grep -c 'v' || true)
 
-# ─── VCS workflow (linear rebase model) ─────────────────────────────────────
-# VCS promotion: feature/* → develop (via PR rebase) → main (linear rebase)
-# This is separate from Artifactory promotion (dev → uat → prod).
+if [ "$remote_count" -eq 0 ]; then
+  if [ "$local_count" -gt 0 ]; then
+    echo "No remote tags found. Deleting $local_count local tags..."
+    git tag -l 'v*' | xargs git tag -d
+    echo "✓ All local tags deleted"
+  else
+    echo "No local or remote tags. Nothing to do."
+  fi
+else
+  echo "Remote has $remote_count tags — keeping local tags intact."
+  echo "To force-delete local tags, run: git tag -l | xargs git tag -d"
+fi
+"""
 
-[tasks."vcs:promote"]
-description = "Promote develop → main (linear rebase fast-forward)"
+[tasks."tag:sync"]
+description = "Sync local tags with remote (fetch remote, prune stale local)"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+echo "Fetching tags from remote..."
+git fetch --tags --prune --prune-tags origin
+echo "✓ Tags synced with remote"
+git tag -l 'v*' --sort=-v:refname
+"""
+
+# ─── VCS workflow ────────────────────────────────────────────────────────────
+
+[tasks."vcs:release"]
+description = "Release develop → main (linear rebase fast-forward) and push"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 
-current_branch=$(git branch --show-current)
-
-echo "Fetching latest from origin..."
+current=$(git branch --show-current)
+echo "Fetching origin..."
 git fetch origin
 
-echo "Checking out main..."
-git checkout main
+# Ensure local branches are up-to-date
+git checkout main 2>/dev/null || git checkout -b main origin/main
 git pull origin main --rebase
 
-echo "Merging develop into main (fast-forward only)..."
-git merge --ff-only origin/develop || {
-  echo ""
-  echo "Fast-forward not possible. Rebasing develop onto main first..."
+git checkout develop 2>/dev/null || git checkout -b develop origin/develop
+git pull origin develop --rebase
+
+# Rebase develop onto main if needed, then fast-forward main
+git checkout main
+git merge --ff-only develop || {
+  echo "Fast-forward failed. Rebasing develop onto main..."
   git checkout develop
   git rebase main
   git push origin develop --force-with-lease
@@ -208,9 +290,8 @@ git merge --ff-only origin/develop || {
 }
 
 git push origin main
-echo "✓ develop promoted to main via fast-forward"
-
-git checkout "$current_branch"
+echo "✓ Released develop → main"
+git checkout "$current" 2>/dev/null || true
 """
 
 [tasks."vcs:rebase"]
@@ -223,13 +304,12 @@ git rebase origin/develop
 echo "✓ Rebased onto develop"
 """
 
-[tasks."vcs:set-default-branch"]
-description = "Set develop as the default branch on GitHub (uses gh CLI, token in-memory only)"
+[tasks."vcs:protect"]
+description = "Apply branch protection to develop and main via GitHub API"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Verify gh is authenticated
 if ! gh auth status &>/dev/null; then
   echo "ERROR: gh CLI is not authenticated. Run: gh auth login"
   exit 1
@@ -238,105 +318,114 @@ fi
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 echo "Repository: $REPO"
 
-# Check if develop branch exists on remote
+# Ensure develop exists on remote
 if ! git ls-remote --heads origin develop | grep -q develop; then
   echo "Creating develop branch from main..."
-  git checkout main
-  git pull origin main
-  git checkout -b develop
-  git push -u origin develop
+  git checkout main && git pull origin main
+  git checkout -b develop && git push -u origin develop
 fi
 
-# Set default branch via GitHub API (token from gh, never stored to disk)
-gh api -X PATCH "repos/${REPO}" \
-  -f default_branch=develop \
-  --silent
+# Set develop as default branch
+gh api -X PATCH "repos/${REPO}" -f default_branch=develop --silent
+echo "✓ Default branch set to develop"
 
-echo "✓ Default branch set to 'develop' for $REPO"
-
-# Add branch protection for develop (mirrors main protection)
-gh api -X PUT "repos/${REPO}/branches/develop/protection" \
-  --input - <<'EOF'
+# Create a ruleset that protects both develop and main
+# Rulesets use branch name patterns, so we can protect both in one rule
+gh api -X POST "repos/${REPO}/rulesets" --input - <<'RULES' || echo "Ruleset may already exist"
 {
-  "required_status_checks": {
-    "strict": true,
-    "contexts": []
+  "name": "Protect develop and main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["refs/heads/main", "refs/heads/develop"],
+      "exclude": []
+    }
   },
-  "enforce_admins": false,
-  "required_pull_request_reviews": {
-    "required_approving_review_count": 1
-  },
-  "restrictions": null,
-  "allow_force_pushes": false,
-  "allow_deletions": false
+  "rules": [
+    { "type": "pull_request", "parameters": { "required_approving_review_count": 1, "dismiss_stale_reviews_on_push": true, "require_last_push_approval": false } },
+    { "type": "required_status_checks", "parameters": { "strict_required_status_checks_policy": true, "required_status_checks": [] } },
+    { "type": "non_fast_forward" },
+    { "type": "deletion" }
+  ]
 }
-EOF
+RULES
 
-echo "✓ Branch protection applied to develop"
+echo "✓ Branch protection ruleset applied to develop and main"
 """
 
-# ─── Build ───────────────────────────────────────────────────────────────────
-
-[tasks.build]
-description = "Build version.ts from deno.json version"
-run = "deno run --allow-all src/make_version.ts"
-
-[tasks.compile]
-description = "Compile cross-platform binaries"
+[tasks."gh:token"]
+description = "Display current gh CLI auth status and token scope (token stays in memory)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-mkdir -p bin
-deno compile --allow-all --no-check --target aarch64-apple-darwin --output ./bin/aarch64-apple-darwin/mod ./src/mod.ts
-deno compile --allow-all --no-check --target x86_64-apple-darwin --output ./bin/x86_64-apple-darwin/mod ./src/mod.ts
-deno compile --allow-all --no-check --target x86_64-unknown-linux-gnu --output ./bin/x86_64-unknown-linux-gnu/mod ./src/mod.ts
-deno compile --allow-all --no-check --target aarch64-unknown-linux-gnu --output ./bin/aarch64-unknown-linux-gnu/mod ./src/mod.ts
-echo "✓ Binaries compiled to ./bin/"
+
+if ! gh auth status 2>&1; then
+  echo ""
+  echo "Not authenticated. Run: gh auth login"
+  exit 1
+fi
+
+echo ""
+echo "Token is managed by gh CLI and stays in memory."
+echo "Use 'gh api ...' for API calls — no local token storage needed."
 """
 
-# ─── NPM / Artifactory registry ─────────────────────────────────────────────
+# ─── Security (GHAS) ────────────────────────────────────────────────────────
+
+[tasks."scan:ghas"]
+description = "Trigger a GitHub Advanced Security (CodeQL) analysis scan"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! gh auth status &>/dev/null; then
+  echo "ERROR: gh CLI not authenticated."
+  exit 1
+fi
+
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
+echo "Triggering GHAS scan for $REPO..."
+
+gh workflow run ghas-scan.yml -R "$REPO" 2>/dev/null || {
+  echo "Workflow 'ghas-scan.yml' not found or dispatch failed."
+  echo "You can also run it from: Actions → GHAS Security Scan → Run workflow"
+  exit 1
+}
+
+echo "✓ GHAS scan dispatched. Check: gh run list --workflow=ghas-scan.yml"
+"""
+
+# ─── NPM / Artifactory ──────────────────────────────────────────────────────
 
 [tasks."npm:set-registry"]
-description = "Set NPM registry to Artifactory (requires ARTIFACTORY_USER + ARTIFACTORY_KEY env vars)"
+description = "Configure NPM to use Artifactory (needs ARTIFACTORY_NPM_URL, ARTIFACTORY_USER, ARTIFACTORY_KEY)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
-
 source ./scripts/resolve_secrets.sh 2>/dev/null || true
-
 RT_URL="" RT_USER="" RT_KEY=""
-
-# Try Conjur first
 if [ -n "${CONJUR_API_KEY:-}" ]; then
   RT_URL=$(resolve_single_secret "artifactory/npm_url" conjur 2>/dev/null) || true
   RT_USER=$(resolve_single_secret "artifactory/user" conjur 2>/dev/null) || true
   RT_KEY=$(resolve_single_secret "artifactory/api_key" conjur 2>/dev/null) || true
 fi
-
 RT_URL="${RT_URL:-${ARTIFACTORY_NPM_URL:-}}"
 RT_USER="${RT_USER:-${ARTIFACTORY_USER:-}}"
 RT_KEY="${RT_KEY:-${ARTIFACTORY_KEY:-}}"
-
 if [ -z "$RT_URL" ] || [ -z "$RT_USER" ] || [ -z "$RT_KEY" ]; then
-  echo "ERROR: Set ARTIFACTORY_NPM_URL, ARTIFACTORY_USER, and ARTIFACTORY_KEY env vars"
-  echo "  or configure Conjur (CONJUR_API_KEY, CONJUR_URL, CONJUR_SAFE)"
+  echo "ERROR: Set ARTIFACTORY_NPM_URL, ARTIFACTORY_USER, ARTIFACTORY_KEY env vars"
   exit 1
 fi
-
-# Configure npm to use Artifactory
 npm config set registry "$RT_URL"
-
-# Set auth — Artifactory uses _auth = base64(user:key)
 AUTH=$(echo -n "${RT_USER}:${RT_KEY}" | base64)
-REGISTRY_HOST=$(echo "$RT_URL" | sed 's|https\\?://||')
+REGISTRY_HOST=$(echo "$RT_URL" | sed 's|https*://||')
 npm config set "//${REGISTRY_HOST}:_auth" "$AUTH"
-
 echo "✓ NPM registry set to $RT_URL"
-echo "  (credentials stored in ~/.npmrc, not in repo)"
 """
 
 [tasks."npm:reset-registry"]
-description = "Reset NPM registry to default (npmjs.org)"
+description = "Reset NPM registry to npmjs.org"
 run = """
 #!/usr/bin/env bash
 npm config set registry https://registry.npmjs.org/
@@ -346,7 +435,7 @@ echo "✓ NPM registry reset to https://registry.npmjs.org/"
 # ─── Secrets & Transcrypt ───────────────────────────────────────────────────
 
 [tasks."secrets:init"]
-description = "Bootstrap transcrypt: auto-configure from repo secret or create new"
+description = "Bootstrap transcrypt from repo secret or create new"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -355,7 +444,7 @@ transcrypt_bootstrap
 """
 
 [tasks."secrets:resolve"]
-description = "Resolve secrets: Conjur (if CONJUR_API_KEY exists) → fallback to env vars/inputs"
+description = "Resolve secrets via Conjur → env vars/inputs"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
@@ -365,75 +454,92 @@ resolve_secrets "$@"
 
 # ─── Setup & Init ───────────────────────────────────────────────────────────
 
-[tasks.init]
-description = "Full project initialisation (install deps, bootstrap secrets, set version)"
-depends = ["secrets:init", "version:init", "version:set"]
+[tasks."project:init"]
+description = "Full project init: clean tags, fetch remote, sync version, bootstrap secrets"
+depends = ["tag:sync", "version:init", "version:sync", "secrets:init"]
 run = """
 #!/usr/bin/env bash
 echo ""
-echo "✓ Project initialised. Run 'mise tasks' to see available tasks."
+echo "✓ Project initialised."
+echo "  Run 'mise tasks' for available tasks."
+echo "  Run 'mise run completions' to install shell completions."
 """
 
-[tasks.setup]
-description = "Install mise shell completions for bash, zsh, and fish"
+[tasks.completions]
+description = "Install mise shell completions (detects bash/zsh/fish, prompts for location)"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "Installing mise shell completions..."
+CURRENT_SHELL=$(basename "${SHELL:-/bin/bash}")
+echo "Detected shell: $CURRENT_SHELL"
+echo ""
 
-# Bash
-mkdir -p ~/.local/share/bash-completion/completions
-mise completion bash > ~/.local/share/bash-completion/completions/mise 2>/dev/null && \
-  echo "  ✓ bash" || echo "  ⚠ bash (skipped)"
+install_bash() {
+  local default="$HOME/.local/share/bash-completion/completions/mise"
+  read -rp "Bash completion path [$default]: " dest
+  dest="${dest:-$default}"
+  mkdir -p "$(dirname "$dest")"
+  mise completion bash > "$dest"
+  echo "  ✓ Bash completions → $dest"
+}
 
-# Zsh
-mkdir -p ~/.zsh/completions
-mise completion zsh > ~/.zsh/completions/_mise 2>/dev/null && \
-  echo "  ✓ zsh" || echo "  ⚠ zsh (skipped)"
+install_zsh() {
+  local default="$HOME/.zsh/completions/_mise"
+  read -rp "Zsh completion path [$default]: " dest
+  dest="${dest:-$default}"
+  mkdir -p "$(dirname "$dest")"
+  mise completion zsh > "$dest"
+  echo "  ✓ Zsh completions → $dest"
+  echo "  Add to .zshrc: fpath=($(dirname "$dest") \\$fpath)"
+}
 
-# Fish
-if command -v fish &>/dev/null; then
-  fish_dir="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
-  mkdir -p "$fish_dir"
-  mise completion fish > "$fish_dir/mise.fish" && \
-    echo "  ✓ fish" || echo "  ⚠ fish (skipped)"
-else
-  echo "  ⚠ fish not installed, skipping"
+install_fish() {
+  local default="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/mise.fish"
+  read -rp "Fish completion path [$default]: " dest
+  dest="${dest:-$default}"
+  mkdir -p "$(dirname "$dest")"
+  mise completion fish > "$dest"
+  echo "  ✓ Fish completions → $dest"
+}
+
+case "$CURRENT_SHELL" in
+  fish) install_fish ;;
+  zsh)  install_zsh ;;
+  *)    install_bash ;;
+esac
+
+echo ""
+read -rp "Install completions for other shells too? [y/N] " more
+if [[ "$more" =~ ^[Yy] ]]; then
+  case "$CURRENT_SHELL" in
+    fish) install_bash; install_zsh ;;
+    zsh)  install_bash; install_fish ;;
+    *)    install_zsh; install_fish ;;
+  esac
 fi
 
 echo ""
-echo "Restart your shell or 'source ~/.bashrc' to activate."
+echo "✓ Done. Restart your shell to activate completions."
+echo "  All mise tasks are tab-completable: mise run <TAB>"
 """
 
-[tasks.help]
-description = "Show all available tasks with descriptions"
-run = """
-#!/usr/bin/env bash
-echo ""
-echo "Available tasks (run with: mise run <task>):"
-echo "─────────────────────────────────────────────"
-mise tasks 2>/dev/null || echo "Run 'mise tasks' for task list"
-echo ""
-echo "Tip: 'mise run <task>' to execute, 'mise completion <shell>' for completions"
-"""
-
-# ─── CI helpers ──────────────────────────────────────────────────────────────
+# ─── CI ──────────────────────────────────────────────────────────────────────
 
 [tasks."ci:lint"]
-description = "CI lint check"
+description = "CI: lint check"
 run = "deno lint"
 
 [tasks."ci:check"]
-description = "CI type check"
+description = "CI: type check"
 run = "deno check ./src/mod.ts"
 
 [tasks."ci:test"]
-description = "CI test run"
+description = "CI: test run"
 run = "deno test -A"
 
 [tasks."ci:all"]
-description = "Run all CI checks (lint + check + test + build + run)"
+description = "CI: run lint + check + test + build + run"
 depends = ["lint", "check", "test", "build", "run"]
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
@@ -448,7 +554,7 @@ docker buildx bake package --set "package.args.TAG=$version"
 """
 
 [tasks."docker:push"]
-description = "Push Docker image to registry"
+description = "Push Docker image to configured registry"
 run = """
 #!/usr/bin/env bash
 set -euo pipefail
