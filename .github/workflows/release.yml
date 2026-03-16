@@ -40,10 +40,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Ensure version.ts matches deno.json
+        run: mise run build
 
       - name: Compile Binary
         run: |
