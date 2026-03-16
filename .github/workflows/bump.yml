@@ -1,4 +1,12 @@
-name: Version Bump & Tag
+name: Tag & Release Version
+
+# Runs on push to main. Reads the version from deno.json (set locally
+# by `mise run bump:patch/minor/major/build`), ensures version.ts is
+# in sync, and creates + pushes the git tag if it doesn't exist yet.
+# The tag push then triggers release.yml.
+#
+# Version authority is LOCAL — developers choose the version with
+# `mise run bump:*` and commit the result. CI just tags and releases.
 
 on:
   push:
@@ -9,64 +17,47 @@ permissions:
   contents: write
 
 jobs:
-  bump:
+  tag:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup mise
         uses: jdx/mise-action@v2
 
-      - name: Determine Version Bump
-        id: version_bump
-        uses: paulhatch/semantic-version@v5.4.0
-        with:
-          tag_prefix: "v"
-          major_pattern: "#major"
-          minor_pattern: "#minor"
-          version_format: "${major}.${minor}.${patch}"
-          bump_each_commit: true
-          bump_each_commit_patch_pattern: "#patch"
-
-      - name: Check if tag already exists
-        id: check_tag
+      - name: Read version and ensure version.ts is in sync
+        id: ver
         run: |
-          RELEASE_TAG="${{ steps.version_bump.outputs.version_tag }}"
-          if git tag -l | grep -qx "$RELEASE_TAG"; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $RELEASE_TAG already exists, skipping."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+          # Regenerate version.ts from deno.json (idempotent)
+          mise run build
 
-      - name: Commit version bump and tag
-        if: steps.check_tag.outputs.exists == 'false'
-        run: |
-          NEW_VERSION="v${{ steps.version_bump.outputs.version }}"
-          RELEASE_TAG="${{ steps.version_bump.outputs.version_tag }}"
+          VERSION=$(jq -r '.version' deno.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Current deno.json version: $VERSION"
 
+          # If build changed version.ts, commit it
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Update deno.json and regenerate version.ts
-          tmp=$(mktemp)
-          jq --arg v "$NEW_VERSION" '.version = $v' deno.json > "$tmp" && mv "$tmp" deno.json
-          mise run build
-
-          # Commit the version files
-          git add deno.json src/version.ts
-          if git diff --cached --quiet; then
-            echo "No version changes to commit."
-          else
-            git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          if ! git diff --quiet src/version.ts; then
+            git add src/version.ts
+            git commit -m "chore: sync version.ts to $VERSION [skip ci]"
             git push origin main
+            echo "Committed version.ts sync"
           fi
 
-          # Tag the NEW commit (which contains the correct version)
-          git tag -a "$RELEASE_TAG" -m "$RELEASE_TAG"
-          git push origin "$RELEASE_TAG"
-          echo "✓ Version bumped to $NEW_VERSION, tagged $RELEASE_TAG"
+      - name: Create and push tag
+        run: |
+          TAG="${{ steps.ver.outputs.version }}"
+
+          if git tag -l | grep -qx "$TAG"; then
+            echo "Tag $TAG already exists — nothing to do."
+            exit 0
+          fi
+
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
+          echo "✓ Tagged and pushed $TAG → release.yml will fire"

@@ -558,20 +558,8 @@ echo "  All mise tasks are tab-completable: mise run <TAB>"
 
 # ─── CI ──────────────────────────────────────────────────────────────────────
 
-[tasks."ci:lint"]
-description = "CI: lint check"
-run = "deno lint"
-
-[tasks."ci:check"]
-description = "CI: type check"
-run = "deno check ./src/mod.ts"
-
-[tasks."ci:test"]
-description = "CI: test run"
-run = "deno test -A"
-
 [tasks."ci:all"]
-description = "CI: run lint + check + test + build + run"
+description = "CI: run full pipeline (lint → check → test → build → run)"
 depends = ["lint", "check", "test", "build", "run"]
 
 # ─── Docker ──────────────────────────────────────────────────────────────────
