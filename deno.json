@@ -55,18 +55,19 @@
     "proseWrap": "preserve"
   },
   "tasks": {
-    "run":        "deno run --allow-all src/mod.ts",
-    "check":      "deno check src/mod.ts",
-    "lint":       "deno lint",
-    "lint:fix":   "deno lint --fix",
-    "fmt":        "deno fmt",
-    "fmt:check":  "deno fmt --check",
-    "test":       "deno test -A --reporter=pretty",
-    "build":      "deno run --allow-all src/make_version.ts",
-    "upgrade":    "deno outdated --update --latest",
-    "validate-hooks": "deno run -A npm:lefthook validate",
-    "pre-commit": "deno run -A npm:lefthook run pre-commit",
-    "pre-push":   "deno run -A npm:lefthook run pre-push"
+    "execute":         "deno run --allow-all src/mod.ts",
+    "run":             "deno run --allow-all src/mod.ts",
+    "check":           "deno check src/mod.ts",
+    "lint":            "deno lint",
+    "lint:fix":        "deno lint --fix",
+    "fmt":             "deno fmt",
+    "fmt:check":       "deno fmt --check",
+    "test":            "deno test -A --reporter=pretty",
+    "build":           "deno run --allow-read --allow-write src/make_version.ts",
+    "upgrade":         "deno outdated --update --latest",
+    "pre-commit":      "deno run -A npm:lefthook run pre-commit",
+    "pre-push":        "deno run -A npm:lefthook run pre-push",
+    "validate-hooks":  "deno run -A npm:lefthook validate"
   },
   "imports": {
     "@deno/dnt": "jsr:@deno/dnt@^0.41.2",

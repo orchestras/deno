@@ -13,20 +13,24 @@ Patterns channel: **`deno1a`** from [orchestras/dev-patterns](https://github.com
 ### Key commands
 
 ```sh
-mise run run            # run app
+mise run execute        # run app
 mise run lint:check     # lint
 mise run lint:fix       # auto-fix lint issues
 mise run fmt:check      # check formatting
 mise run typecheck      # type-check
 mise run test           # tests
 mise run build          # regenerate version.ts
-mise run ci             # full CI pipeline (lint → fmt:check → typecheck → test → build → run)
+mise run ci             # full CI pipeline (lint:check → fmt:check → typecheck → test → build → execute)
 
 mise run version:sync   # fetch remote tags, sync deno.json
 mise run bump:patch     # bump from latest remote tag
 mise run tag:push       # push tags to origin
 mise run vcs:release    # rebase main onto develop, push
-mise run scan:ghas      # trigger CodeQL scan
+mise run scan:ghas      # trigger CodeQL scan (local)
+mise run scan:sast      # SAST + secret heuristics
+mise run scan:complexity  # complexity analysis
+mise run dispatch:autobump [auto|patch|minor|major]  # trigger GitHub autobump workflow
+mise run dispatch:configure  # trigger GitHub repo autoconfigure workflow
 mise run hooks:sync     # sync hooks from orchestras/dev-patterns
 ```
 
@@ -35,8 +39,9 @@ mise run hooks:sync     # sync hooks from orchestras/dev-patterns
 All tasks live in `.mise/tasks/` as executable scripts (not inline TOML).
 Task directories use `/` for namespacing:
 
-- `run`, `test`, `typecheck`, `build`, `ci`, `install` — core
+- `execute`, `test`, `typecheck`, `build`, `ci`, `install` — core
 - `lint/check`, `lint/fix` — lint tasks
+- `dispatch/autobump`, `dispatch/configure`, `dispatch/ghas` — workflow triggers
 - `bump/patch`, `bump/minor`, `bump/major`, `bump/prerel` — versioning
 - `tag/push`, `tag/list`, `tag/sync`, `tag/fetch`, `tag/remote`, `tag/create`, `tag/clean`
 - `vcs/rebase`, `vcs/integrate`, `vcs/release`, `vcs:protect`

@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
-#MISE description="Register config/githooks/hooks as git hooks path"
+#MISE description="Register config/githooks/hooks as the active git hooks path"
 set -euo pipefail
-git config --local core.hooksPath config/githooks/hooks
-echo "✓ git hooks path set to config/githooks/hooks"
-ls -la config/githooks/hooks/ 2>/dev/null || echo "  (no hooks installed yet — run 'mise run hooks:sync')"
+
+HOOKS_DIR="config/githooks/hooks"
+
+if [ ! -d "${HOOKS_DIR}" ]; then
+  echo "⚠ Hooks directory not found: ${HOOKS_DIR}"
+  echo "  Run 'mise run hooks:sync' first"
+  exit 1
+fi
+
+git config --local core.hooksPath "${HOOKS_DIR}"
+echo "✓ git hooks path → ${HOOKS_DIR}"
+echo ""
+ls -la "${HOOKS_DIR}" | tail -n +2
