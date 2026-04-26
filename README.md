@@ -53,7 +53,7 @@ Run `mise tasks` to list all tasks with descriptions. All tasks live in `.mise/t
 ### Development
 
 ```bash
-mise run run          # deno run src/mod.ts
+mise run execute      # deno run src/mod.ts
 mise run build        # sync version.ts from deno.json
 mise run install      # cache all Deno dependencies
 ```
@@ -77,49 +77,64 @@ mise run test         # deno test -A --reporter=pretty
 ### CI
 
 ```bash
-mise run ci           # full pipeline: lint → fmt:check → typecheck → test → build → run
+mise run ci           # full pipeline: lint:check → fmt:check → typecheck → test → build → execute
+```
+
+### Scanning & SAST
+
+```bash
+mise run scan:deps        # deno audit — known vulnerability check
+mise run scan:sast        # deno lint with security + hardcoded-secret heuristics
+mise run scan:complexity  # cyclomatic complexity analysis
+mise run scan:ghas        # trigger CodeQL via mise (local dispatch)
 ```
 
 ### Version Bumping
 
 ```bash
-mise run version:show   # show current version
-mise run bump:patch     # 0.1.5 → 0.1.6
-mise run bump:minor     # 0.1.5 → 0.2.0
-mise run bump:major     # 0.1.5 → 1.0.0
-mise run bump:prerel alpha  # 0.1.5 → 0.1.5-alpha.1
-mise run tag:push       # push tags → triggers release workflow
+mise run version:show       # show current version
+mise run bump:patch         # v0.1.5 → v0.1.6  (auto-cascades at 9)
+mise run bump:minor         # v0.1.5 → v0.2.0
+mise run bump:major         # v0.1.5 → v1.0.0
+mise run bump:prerel alpha  # v0.1.5 → v0.1.5-alpha.1
+mise run tag:push           # push tags → triggers release.yml
+```
+
+### Dispatch Workflows
+
+```bash
+mise run dispatch:autobump [auto|patch|minor|major] [--dry-run]
+# → triggers dispatch-autobump-release.yml on GitHub Actions
+
+mise run dispatch:configure [--dry-run]
+# → triggers dispatch-autoconfigure-rulesets.yml (3 branch rulesets)
+
+mise run dispatch:ghas
+# → triggers ghas-scan.yml
 ```
 
 ### Git & VCS
 
 ```bash
-mise run git:config        # configure delta, GPG, rebase-only, hooks path
-mise run vcs:rebase        # rebase feature branch onto origin/develop
-mise run vcs:integrate feat/my-feature   # integrate feature → develop (rebase)
-mise run vcs:release       # release develop → main (rebase + force push)
-mise run vcs:protect       # apply branch protection rulesets via GitHub API
+mise run git:config              # configure delta, GPG, rebase-only, hooks path
+mise run vcs:rebase              # rebase feature branch onto origin/develop
+mise run vcs:integrate feat/xyz  # integrate feature → develop (rebase, no merge commits)
+mise run vcs:release             # release develop → main (rebase + force push)
+mise run vcs:protect             # apply 3 branch rulesets via GitHub API
 ```
 
-### Security & Scanning
-
-```bash
-mise run scan:ghas    # trigger CodeQL scan via workflow dispatch
-mise run scan:deps    # audit Deno dependencies (deno audit)
-mise run scan:sast    # static analysis with deno lint (extended)
-```
-
-### Git Hooks
+### Git Hooks & Patterns
 
 ```bash
 mise run hooks:sync     # sync hooks from orchestras/dev-patterns (deno1a channel)
 mise run hooks:install  # register config/githooks/hooks path in git config
+mise run patterns:sync  # full sync: hooks + record .patterns-hash
 ```
 
 ### Binary Compilation
 
 ```bash
-mise run deno:compile   # cross-compile binaries for all platforms to ./bin/
+mise run deno:compile   # cross-compile binaries for all 5 platforms to ./bin/
 ```
 
 > For automated cross-platform release binaries, push a version tag — the

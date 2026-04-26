@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-#MISE description="Regenerate src/version.ts from deno.json version"
+#MISE description="Regenerate src/version.ts from deno.json version field"
 set -euo pipefail
-deno run --allow-all src/make_version.ts
-echo "✓ version.ts regenerated"
+
+VERSION=$(jq -r '.version' deno.json)
+echo "Building version.ts for ${VERSION}..."
+deno run --allow-read --allow-write src/make_version.ts
+echo "✓ version.ts regenerated (${VERSION})"
