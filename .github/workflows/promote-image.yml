@@ -52,7 +52,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Determine source and target repos
         id: repos
@@ -102,7 +102,7 @@ jobs:
           echo "rt_key=$RT_KEY" >> "$GITHUB_OUTPUT"
 
       - name: Setup JFrog CLI
-        uses: jfrog/setup-jfrog-cli@v4
+        uses: jfrog/setup-jfrog-cli@v5
 
       - name: Promote Docker image within Artifactory
         env:
