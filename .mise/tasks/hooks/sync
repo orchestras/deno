@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE description="Sync git hooks from orchestras/dev-patterns (deno1a channel)"
+set -euo pipefail
+CHANNEL="deno1a"
+REPO="orchestras/dev-patterns"
+DEST="config/githooks/hooks"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+echo "Fetching hooks from ${REPO} lib/${CHANNEL}/hooks/..."
+BASE="https://raw.githubusercontent.com/${REPO}/main/lib/${CHANNEL}/hooks"
+mkdir -p "${DEST}"
+for hook in pre-commit commit-msg pre-push; do
+  echo "  → $hook"
+  curl -fsSL "${BASE}/${hook}" -o "${DEST}/${hook}"
+  chmod +x "${DEST}/${hook}"
+done
+curl -fsSL "${BASE}/githooks.toml" -o "config/githooks/githooks.toml" 2>/dev/null || true
+echo "✓ Hooks synced from ${REPO} (channel: ${CHANNEL})"
+echo "  Run 'mise run hooks:install' to register the hooks path in git."

@@ -2,6 +2,7 @@
   "version": "v0.1.4",
   "name": "@softdist/orchestras",
   "license": "MIT",
+  "main": "src/mod.ts",
   "exports": "./src/mod.ts",
   "test": {
     "include": [
@@ -41,14 +42,31 @@
       ]
     }
   },
+  "fmt": {
+    "include": [
+      "src/**/*.ts"
+    ],
+    "exclude": [
+      "src/tests/*.ts"
+    ],
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  },
   "tasks": {
-    "test": "deno test -A",
-    "build": "deno run --allow-all src/make_version.ts",
-    "check": "deno check src/mod.ts",
-    "upgrade": "deno outdated --update --latest",
+    "run":        "deno run --allow-all src/mod.ts",
+    "check":      "deno check src/mod.ts",
+    "lint":       "deno lint",
+    "lint:fix":   "deno lint --fix",
+    "fmt":        "deno fmt",
+    "fmt:check":  "deno fmt --check",
+    "test":       "deno test -A --reporter=pretty",
+    "build":      "deno run --allow-all src/make_version.ts",
+    "upgrade":    "deno outdated --update --latest",
     "validate-hooks": "deno run -A npm:lefthook validate",
     "pre-commit": "deno run -A npm:lefthook run pre-commit",
-    "pre-push": "deno run -A npm:lefthook run pre-push"
+    "pre-push":   "deno run -A npm:lefthook run pre-push"
   },
   "imports": {
     "@deno/dnt": "jsr:@deno/dnt@^0.41.2",

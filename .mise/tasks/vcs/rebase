@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Rebase current feature branch onto origin/develop"
+set -euo pipefail
+source "$(git rev-parse --show-toplevel)/scripts/colors.sh" 2>/dev/null || true
+echo "Fetching origin/develop..."
+git fetch origin develop
+git pull --rebase origin develop
+echo "✓ Rebased onto origin/develop"

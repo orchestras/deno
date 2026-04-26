@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Static analysis / complexity check with deno lint (SAST mode)"
+set -euo pipefail
+echo "=== SAST: deno lint (extended) ==="
+deno lint --rules-tags=recommended
+echo "✓ SAST scan complete"

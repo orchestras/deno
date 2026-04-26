@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#MISE description="Full CI pipeline: lint → fmt:check → typecheck → test → build → run"
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "${ROOT}"
+echo "=== CI Pipeline ==="
+echo "→ lint:check"
+mise run lint:check
+echo "→ fmt:check"
+mise run fmt:check
+echo "→ typecheck"
+mise run typecheck
+echo "→ test"
+mise run test
+echo "→ build"
+mise run build
+echo "→ run"
+mise run run
+echo ""
+echo "✓ All CI checks passed"

@@ -1,109 +1,239 @@
 <!-- markdownlint-disable MD041 MD012 -->
 
-# Deno Edge Template
+# orchestras/deno
 
-**TypeScript microservice template** using [Deno](https://deno.com) +
-[mise en place](https://mise.jdx.dev/) for tool and task management.
+> Deno TypeScript template — Deno · Mise · GHAS · GitHooks · JSR/npm
 
-[![CI](https://img.shields.io/badge/CI-passing-green)](../../actions)
+A batteries-included Deno project template modelled after [orchestras/python3](https://github.com/orchestras/python3). All automation lives in `.mise/tasks/` as executable scripts, making tasks portable for the upcoming `mise-sync` engine. Git hooks are managed via the `deno1a` channel in [orchestras/dev-patterns](https://github.com/orchestras/dev-patterns).
+
+[![CI](https://img.shields.io/github/actions/workflow/status/orchestras/deno/ci.yml?branch=develop&label=CI)](../../actions/workflows/ci.yml)
+[![GHAS](https://img.shields.io/github/actions/workflow/status/orchestras/deno/ghas-scan.yml?label=GHAS)](../../actions/workflows/ghas-scan.yml)
 [![mise](https://img.shields.io/badge/managed%20by-mise-blue)](https://mise.jdx.dev/)
+[![JSR](https://jsr.io/badges/@softdist/orchestras)](https://jsr.io/@softdist/orchestras)
+
+---
+
+## Features
+
+| Tool | Role |
+|------|------|
+| [Deno 2](https://deno.com) | TypeScript runtime + built-in lint/fmt/test/check |
+| [Mise](https://mise.jdx.dev) | Tool version manager + task runner |
+| [Lefthook](https://lefthook.dev) | Git hook manager |
+| [GHAS / CodeQL](https://github.com/features/security) | GitHub Advanced Security scanning |
+| [Dependabot](https://docs.github.com/en/code-security/dependabot) | Automated dependency updates |
+| [dev-patterns deno1a](https://github.com/orchestras/dev-patterns) | Shared hooks + task channel |
+
+---
 
 ## Quick Start
 
 ```bash
-curl https://mise.run | sh                         # install mise
+# 1. Install mise
+curl https://mise.run | sh
 echo 'eval "$(~/.local/bin/mise activate bash)"' >> ~/.bashrc && source ~/.bashrc
-mise install                                       # install Deno 2.0.2 + Node 22
-mise run project:init                              # fetch tags, sync version, bootstrap secrets
-mise run completions                               # install shell tab-completions
+
+# 2. Clone and initialise
+git clone https://github.com/orchestras/deno my-project
+cd my-project
+
+# 3. Full project init (installs tools, syncs version, configures git, installs hooks)
+mise run project:init
+
+# 4. Run the app
+mise run run
 ```
 
-## Tasks
+---
 
-Every operation is a `mise run <task>`. Run **`mise tasks`** for the full
-auto-documented list. The `Makefile` is a thin alias layer (`make run` →
-`mise run run`).
+## Task Reference
 
-### Core
+Run `mise tasks` to list all tasks with descriptions. All tasks live in `.mise/tasks/`.
 
-| Task | Description |
-| --- | --- |
-| `run` | Run the application |
-| `check` | Type-check source |
-| `lint` | Lint source |
-| `fmt` / `fmt:check` | Format / check formatting |
-| `test` | Run tests |
-| `build` | Regenerate `src/version.ts` |
-| `compile` | Cross-compile binaries to `./bin/` |
+### Development
 
-### Version & Tags
-
-Version is derived from **git remote tags** — no `.semver.*` caches.
-
-| Task | Description |
-| --- | --- |
-| `version` | Show current version |
-| `version:sync` | Fetch remote tags → update deno.json + version.ts |
-| `version:init` | Create v0.1.0 if no remote tags exist |
-| `bump:patch` | Latest remote tag + 1 patch (e.g. 0.1.5 → 0.1.6) |
-| `bump:minor` | Latest remote tag + 1 minor (e.g. 0.1.5 → 0.2.0) |
-| `bump:major` | Latest remote tag + 1 major (e.g. 0.1.5 → 1.0.0) |
-| `bump:build` | Latest remote tag + build metadata (e.g. 0.1.5+12345) |
-| `tag:push` | Push all tags to origin |
-| `tag:list` | List local tags |
-| `tag:remote` | List remote tags |
-| `tag:fetch` | Fetch remote tags into local |
-| `tag:sync` | Sync local tags with remote (prune stale) |
-| `tag:clean` | Delete all local tags **only if** remote has none |
-| `tag:create` | Create tag from deno.json version |
-
-Bump commands fetch the latest remote tag, compute the next version, update
-`deno.json` + `version.ts`, and create the tag locally. Push the tag with
-`mise run tag:push` after all commits are pushed.
-
-### VCS (branching)
-
-Linear rebase model: `feature/*` → `develop` → `main`.
-
-| Task | Description |
-| --- | --- |
-| `vcs:release` | Fast-forward main to develop (rebase if needed) and push |
-| `vcs:rebase` | Rebase current branch onto develop |
-| `vcs:protect` | Apply branch protection ruleset to develop + main |
-| `gh:token` | Show gh CLI auth status (token stays in memory) |
-
-### Security
-
-| Task | Description |
-| --- | --- |
-| `scan:ghas` | Trigger GitHub Advanced Security (CodeQL) scan |
-
-### Secrets / NPM / Docker
-
-| Task | Description |
-| --- | --- |
-| `secrets:init` | Auto-bootstrap transcrypt from repo secret |
-| `npm:set-registry` | Point NPM at Artifactory |
-| `npm:reset-registry` | Reset NPM to npmjs.org |
-| `docker:build` | Build release Docker image |
-| `docker:push` | Push image to registry |
-
-### Setup
-
-| Task | Description |
-| --- | --- |
-| `project:init` | Full init: sync tags, set version, bootstrap secrets |
-| `completions` | Install shell completions (detects bash/zsh/fish, prompts) |
-
-## Branch Model
-
-```
-feature/MCKB-2000 ──(PR rebase)──→ develop ──(vcs:release)──→ main
+```bash
+mise run run          # deno run src/mod.ts
+mise run build        # sync version.ts from deno.json
+mise run install      # cache all Deno dependencies
 ```
 
-- **develop** — default branch, integration target for all PRs
-- **main** — production; tags and releases originate here
-- Both protected by the same ruleset (`mise run vcs:protect`)
+### Code Quality
+
+```bash
+mise run lint:check   # deno lint
+mise run lint:fix     # deno lint --fix
+mise run fmt:fix      # deno fmt
+mise run fmt:check    # deno fmt --check (CI-safe)
+mise run typecheck    # deno check src/mod.ts
+```
+
+### Testing
+
+```bash
+mise run test         # deno test -A --reporter=pretty
+```
+
+### CI
+
+```bash
+mise run ci           # full pipeline: lint → fmt:check → typecheck → test → build → run
+```
+
+### Version Bumping
+
+```bash
+mise run version:show   # show current version
+mise run bump:patch     # 0.1.5 → 0.1.6
+mise run bump:minor     # 0.1.5 → 0.2.0
+mise run bump:major     # 0.1.5 → 1.0.0
+mise run bump:prerel alpha  # 0.1.5 → 0.1.5-alpha.1
+mise run tag:push       # push tags → triggers release workflow
+```
+
+### Git & VCS
+
+```bash
+mise run git:config        # configure delta, GPG, rebase-only, hooks path
+mise run vcs:rebase        # rebase feature branch onto origin/develop
+mise run vcs:integrate feat/my-feature   # integrate feature → develop (rebase)
+mise run vcs:release       # release develop → main (rebase + force push)
+mise run vcs:protect       # apply branch protection rulesets via GitHub API
+```
+
+### Security & Scanning
+
+```bash
+mise run scan:ghas    # trigger CodeQL scan via workflow dispatch
+mise run scan:deps    # audit Deno dependencies (deno audit)
+mise run scan:sast    # static analysis with deno lint (extended)
+```
+
+### Git Hooks
+
+```bash
+mise run hooks:sync     # sync hooks from orchestras/dev-patterns (deno1a channel)
+mise run hooks:install  # register config/githooks/hooks path in git config
+```
+
+### Binary Compilation
+
+```bash
+mise run deno:compile   # cross-compile binaries for all platforms to ./bin/
+```
+
+> For automated cross-platform release binaries, push a version tag — the
+> [release workflow](.github/workflows/release.yml) compiles on Linux AMD64/ARM64,
+> macOS ARM64/AMD64, and Windows AMD64 in parallel and publishes a GitHub Release.
+
+---
+
+## Project Structure
+
+```
+.
+├── .devcontainer/           # VS Code Dev Container
+├── .github/
+│   ├── workflows/           # CI/CD pipelines
+│   ├── dependabot.yml       # Dependabot config
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── CODEOWNERS
+├── .mise/
+│   └── tasks/               # All mise tasks (executable scripts)
+│       ├── run, test, typecheck, build, ci, install
+│       ├── bump/patch, minor, major, prerel
+│       ├── tag/push, list, sync, remote, fetch, create, clean
+│       ├── vcs/rebase, integrate, release, protect
+│       ├── version/show, sync, init
+│       ├── scan/ghas, deps, sast
+│       ├── hooks/sync, install
+│       ├── git/config
+│       ├── gh/token
+│       ├── deno/compile, upgrade
+│       ├── fmt/fix, check
+│       ├── patterns/sync
+│       ├── secrets/init, resolve
+│       ├── npm/set-registry, reset-registry
+│       ├── project/init
+│       └── completions
+├── config/
+│   └── githooks/
+│       ├── hooks/           # Git hooks (commit-msg, pre-commit, pre-push)
+│       └── githooks.toml    # Channel manifest
+├── scripts/                 # Shared bash utilities (colors, semver, secrets)
+├── src/
+│   ├── mod.ts               # Application entry point
+│   ├── version.ts           # Auto-generated — do not edit
+│   ├── make_version.ts      # Build script for version.ts
+│   └── tests/
+│       └── mod.test.ts      # Test suite
+├── AGENTS.md                # AI agent instructions
+├── CHANGELOG.md             # Changelog
+├── CONTRIBUTING.md          # Contributor guide
+├── deno.json                # Deno config (imports, lint, fmt, tasks)
+├── lefthook.yml             # Lefthook git hook config
+└── mise.toml                # Tool versions + task discovery
+```
+
+---
+
+## Branch Workflow
+
+```
+feature/xyz → develop → main → tag → release
+```
+
+**No merge commits.** Every integration is a rebase.
+
+### Keep your feature branch current
+
+```bash
+mise run vcs:rebase
+# → git pull --rebase origin develop
+```
+
+### Integrate a feature branch into develop
+
+```bash
+mise run vcs:integrate feat/my-feature
+# 1. Rebase feature onto origin/develop
+# 2. git checkout develop && git pull
+# 3. git rebase feat/my-feature
+# 4. git push --force-with-lease origin develop
+```
+
+### Release develop → main
+
+```bash
+mise run vcs:release
+# 1. git checkout main
+# 2. git rebase origin/develop
+# 3. git push --force-with-lease origin main
+```
+
+Then bump and tag:
+
+```bash
+mise run bump:patch   # (or :minor / :major)
+mise run tag:push     # triggers binary + Docker release CI
+```
+
+---
+
+## GitHub Status Checks Setup
+
+For required status checks in branch rulesets to work:
+
+1. Push this template to GitHub (on `develop` branch)
+2. Open one PR to trigger the `pr-check` workflow — this registers the check names
+3. Run `mise run vcs:protect` to apply the ruleset via GitHub API
+4. The following checks will be required:
+   - `pr-check / lint`
+   - `pr-check / typecheck`
+   - `pr-check / test`
+   - `pr-check / security`
+
+---
 
 ## Artifactory Promotion
 
@@ -116,10 +246,14 @@ GitHub Release → Artifactory DEV → UAT → PROD
 See workflows: `artifactory-push-binary.yml`, `artifactory-push-image.yml`,
 `promote-binary.yml`, `promote-image.yml`.
 
+---
+
 ## Supported Platforms
 
 darwin (amd64, arm64) · linux (amd64, arm64) · windows (amd64)
 
+---
+
 ## License
 
-MIT — © Lynsei Asynynivynya 2025
+MIT © [ørchestras](https://github.com/orchestras) 2025

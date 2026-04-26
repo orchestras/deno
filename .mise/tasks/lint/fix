@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Auto-fix lint issues with deno lint --fix"
+set -euo pipefail
+deno lint --fix
+echo "✓ Lint fixes applied"

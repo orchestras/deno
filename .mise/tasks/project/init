@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#MISE description="Full project init: git config, sync tags, set version, install hooks, bootstrap secrets"
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "${ROOT}"
+echo "=== Project Init ==="
+echo "→ git:config"
+mise run git:config
+echo "→ tag:sync"
+mise run tag:sync
+echo "→ version:init"
+mise run version:init
+echo "→ version:sync"
+mise run version:sync
+echo "→ hooks:sync"
+mise run hooks:sync
+echo "→ hooks:install"
+mise run hooks:install
+echo "→ secrets:init"
+mise run secrets:init 2>/dev/null || true
+echo ""
+echo "✓ Project initialised."
+echo "  Run 'mise tasks' for available tasks."
+echo "  Run 'mise run completions' to install shell completions."
