@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Compile cross-platform binaries to ./bin/"
+set -euo pipefail
+mkdir -p bin
+ENTRY="$(jq -r '.main // "src/mod.ts"' deno.json 2>/dev/null || echo 'src/mod.ts')"
+deno compile --allow-all --no-check --target aarch64-apple-darwin   --output ./bin/aarch64-apple-darwin/mod   "${ENTRY}"
+deno compile --allow-all --no-check --target x86_64-apple-darwin    --output ./bin/x86_64-apple-darwin/mod    "${ENTRY}"
+deno compile --allow-all --no-check --target x86_64-unknown-linux-gnu --output ./bin/x86_64-unknown-linux-gnu/mod "${ENTRY}"
+deno compile --allow-all --no-check --target aarch64-unknown-linux-gnu --output ./bin/aarch64-unknown-linux-gnu/mod "${ENTRY}"
+echo "✓ Binaries compiled to ./bin/"

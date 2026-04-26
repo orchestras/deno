@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Register config/githooks/hooks as git hooks path"
+set -euo pipefail
+git config --local core.hooksPath config/githooks/hooks
+echo "✓ git hooks path set to config/githooks/hooks"
+ls -la config/githooks/hooks/ 2>/dev/null || echo "  (no hooks installed yet — run 'mise run hooks:sync')"

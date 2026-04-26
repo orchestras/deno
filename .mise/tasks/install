@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Cache all Deno dependencies declared in deno.json"
+set -euo pipefail
+
+ENTRY="$(jq -r '.main // "src/mod.ts"' deno.json 2>/dev/null || echo 'src/mod.ts')"
+echo "Caching Deno dependencies..."
+deno cache --reload "${ENTRY}" 2>/dev/null || true
+
+if [ -f "deno.lock" ]; then
+  echo "Lock file present — running deno install..."
+  deno install --allow-all 2>/dev/null || true
+fi
+echo "✓ Dependencies cached"

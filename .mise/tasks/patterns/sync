@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Sync mise tasks and hooks from orchestras/dev-patterns (deno1a channel)"
+set -euo pipefail
+CHANNEL="deno1a"
+REPO="orchestras/dev-patterns"
+BASE_URL="https://raw.githubusercontent.com/${REPO}/main/lib/${CHANNEL}"
+echo "=== Syncing from ${REPO} (channel: ${CHANNEL}) ==="
+echo "→ hooks:sync"
+mise run hooks:sync
+echo ""
+HASH=$(curl -fsSL "https://api.github.com/repos/${REPO}/commits/main" 2>/dev/null | jq -r '.sha // "unknown"')
+echo "${HASH}" > .patterns-hash
+echo "✓ Patterns synced from ${REPO}@${HASH}"

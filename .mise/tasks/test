@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run the test suite with deno test"
+set -euo pipefail
+deno test -A --reporter=pretty
