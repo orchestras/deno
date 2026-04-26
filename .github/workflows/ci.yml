@@ -47,5 +47,5 @@ jobs:
       - name: Build (version.ts sync)
         run: mise run build
 
-      - name: Run app
-        run: mise run run
+      - name: Execute app
+        run: mise run execute

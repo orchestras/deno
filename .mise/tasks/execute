@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Run the project entrypoint"
+#MISE description="Execute the application entry point"
 set -euo pipefail
 
 ENTRY="$(jq -r '.main // "src/mod.ts"' deno.json 2>/dev/null || echo 'src/mod.ts')"
